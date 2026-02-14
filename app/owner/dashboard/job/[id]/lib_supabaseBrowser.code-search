@@ -1,0 +1,20 @@
+# Query: lib/supabaseBrowser
+# ContextLines: 1
+
+3 results - 3 files
+
+app/owner/page.tsx:
+  4  import { useRouter } from "next/navigation";
+  5: import { supabase } from "@/lib/supabaseBrowser";
+  6  
+
+app/owner/dashboard/page.tsx:
+  4  import { useRouter } from "next/navigation";
+  5: import { supabase } from "@/lib/supabaseBrowser";
+  6  
+
+app/owner/dashboard/create-job/page.tsx:
+  4  import { useRouter } from "next/navigation";
+  5: import { supabase } from "@/lib/supabaseBrowser";
+  6  
+ 
