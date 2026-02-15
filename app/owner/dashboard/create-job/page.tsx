@@ -8,8 +8,8 @@ export default function CreateJob() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [service, setService] = useState("");
+  const [notes, setNotes] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -18,85 +18,99 @@ export default function CreateJob() {
     setLoading(true);
 
     try {
+      // 1) Must be logged in (RLS depends on auth.uid())
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      if (!userData?.user) throw new Error("Not logged in");
+
+      const userId = userData.user.id;
+
+      // 2) Upload image (optional)
       let imageUrl: string | null = null;
 
-      // 1️⃣ Upload image (optional)
       if (file) {
-        const filePath = `${Date.now()}-${file.name}`;
+        const ext = file.name.split(".").pop() || "jpg";
+        const fileName = `${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
+        const filePath = fileName;
 
-        const { error: uploadError } = await supabase.storage
+        const { error: uploadErr } = await supabase.storage
           .from("job-images")
-          .upload(filePath, file);
+          .upload(filePath, file, { upsert: false });
 
-        if (uploadError) throw uploadError;
+        if (uploadErr) throw uploadErr;
 
-        const { data } = supabase.storage
+        // If bucket is PUBLIC, this gives a public URL
+        const { data: publicUrlData } = supabase.storage
           .from("job-images")
           .getPublicUrl(filePath);
 
-        imageUrl = data.publicUrl;
+        imageUrl = publicUrlData.publicUrl;
       }
 
-      // 2️⃣ Insert job row
-      const { error: insertError } = await supabase
-        .from("jobs")
-        .insert({
-          service: title,
-          notes: description,
-          image_url: imageUrl,
-          status: "pending",
-        });
+      // 3) Insert job (IMPORTANT: created_by MUST equal auth.uid())
+      const { error: insertErr } = await supabase.from("jobs").insert({
+        service,
+        notes,
+        status: "pending",
+        image_url: imageUrl,
+      });
 
-      if (insertError) throw insertError;
+      if (insertErr) throw insertErr;
 
-      // 3️⃣ Redirect to dashboard
+      // 4) Done
+      setService("");
+      setNotes("");
+      setFile(null);
       router.push("/owner/dashboard");
     } catch (err: any) {
-      alert(err.message ?? "Failed to create job");
+      console.error(err);
+      alert(err?.message || "Error creating job");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 600 }}>
+    <div style={{ padding: 20 }}>
       <h1>Create Job</h1>
 
       <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginTop: 10 }}>
           <label>Service</label>
+          <br />
           <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            value={service}
+            onChange={(e) => setService(e.target.value)}
             required
-            style={{ width: "100%", padding: 10 }}
+            style={{ width: "100%", padding: 8 }}
           />
         </div>
 
-        <div style={{ marginBottom: 12 }}>
-          <label>Description</label>
+        <div style={{ marginTop: 10 }}>
+          <label>Notes</label>
+          <br />
           <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            style={{ width: "100%", padding: 10, minHeight: 120 }}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            required
+            style={{ width: "100%", padding: 8, minHeight: 120 }}
           />
         </div>
 
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginTop: 10 }}>
           <label>Image (optional)</label>
+          <br />
           <input
             type="file"
             accept="image/*"
-            onChange={(e) =>
-              setFile(e.target.files?.[0] ?? null)
-            }
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
         </div>
 
-        <button disabled={loading} style={{ padding: "10px 14px" }}>
-          {loading ? "Saving..." : "Create Job"}
+        <button type="submit" disabled={loading} style={{ marginTop: 15 }}>
+          {loading ? "Creating..." : "Create Job"}
         </button>
       </form>
-    </main>
+    </div>
   );
 }
