@@ -1,8 +1,8 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClientBrowser } from "@/lib/supabaseBrowser";
 
 type Job = {
@@ -13,49 +13,64 @@ type Job = {
   created_at: string | null;
 };
 
-// Create ONE client instance (important)
-const supabase = createClientBrowser();
-
 export default function Dashboard() {
+  const supabase = createClientBrowser();
+  const router = useRouter();
+
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadJobs = async () => {
-      setLoading(true);
-      setErrorMsg(null);
+    const checkSessionAndLoad = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
 
-      const { data, error } = await supabase
-        .from("jobs")
-        .select("id, service, notes, status, created_at")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        setErrorMsg(error.message);
-        setJobs([]);
-      } else {
-        setJobs((data as Job[]) ?? []);
+      if (!session) {
+        router.push("/login");
+        return;
       }
 
-      setLoading(false);
+      loadJobs();
     };
 
-    loadJobs();
-  }, []); // ✅ run once
+    checkSessionAndLoad();
+  }, []);
+
+  const loadJobs = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("id, service, notes, status, created_at")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setErrorMsg(error.message);
+      setJobs([]);
+    } else {
+      setJobs(data ?? []);
+    }
+
+    setLoading(false);
+  };
 
   return (
     <main style={{ padding: 24 }}>
       <h1>Owner Dashboard</h1>
 
       <div style={{ margin: "12px 0" }}>
-        <Link href="/owner/dashboard/create-job">Create Job</Link>
+        <Link href="/owner/dashboard/create-job">
+          Create Job
+        </Link>
       </div>
 
       {loading && <p>Loading...</p>}
       {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
 
-      {!loading && !errorMsg && jobs.length === 0 && <p>No jobs yet.</p>}
+      {!loading && !errorMsg && jobs.length === 0 && (
+        <p>No jobs yet.</p>
+      )}
 
       {!loading && !errorMsg && jobs.length > 0 && (
         <div style={{ display: "grid", gap: 12 }}>
@@ -71,8 +86,16 @@ export default function Dashboard() {
               <Link href={`/owner/dashboard/job/${job.id}`}>
                 <strong>{job.service || "Job"}</strong>
               </Link>
-              <div style={{ opacity: 0.8 }}>{job.status || ""}</div>
-              {job.notes && <div style={{ marginTop: 6 }}>{job.notes}</div>}
+
+              <div style={{ opacity: 0.8 }}>
+                Status: {job.status}
+              </div>
+
+              {job.notes && (
+                <div style={{ marginTop: 6 }}>
+                  {job.notes}
+                </div>
+              )}
             </div>
           ))}
         </div>
