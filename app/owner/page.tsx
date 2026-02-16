@@ -1,80 +1,78 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClientBrowser } from "@/lib/supabaseBrowser";
 
-const supabase = createClientBrowser();
+export default function OwnerLoginPage() {
+  const supabase = createClientBrowser();
+  const router = useRouter();
 
-type Job = {
-  id: string;
-  service: string | null;
-  notes: string | null;
-  status: string | null;
-  created_at: string | null;
-};
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-export default function Dashboard() {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
+  // If already logged in, go to dashboard
   useEffect(() => {
-    const loadJobs = async () => {
-      setLoading(true);
-      setErrorMsg(null);
-
-      const { data, error } = await supabase
-        .from("jobs")
-        .select("id, service, notes, status, created_at")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        setErrorMsg(error.message);
-        setJobs([]);
-      } else {
-        setJobs((data as Job[]) ?? []);
-      }
-
-      setLoading(false);
-    };
-
-    loadJobs();
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) router.replace("/owner/dashboard");
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const login = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMsg(null);
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setMsg(error.message);
+    } else {
+      router.push("/owner/dashboard");
+      router.refresh();
+    }
+
+    setLoading(false);
+  };
+
   return (
-    <main style={{ padding: 24 }}>
-      <h1>Owner Dashboard</h1>
+    <main style={{ padding: 24, maxWidth: 420 }}>
+      <h1 style={{ marginBottom: 12 }}>Owner Login</h1>
 
-      <div style={{ margin: "12px 0" }}>
-        <Link href="/owner/dashboard/create-job">Create Job</Link>
-      </div>
+      <form onSubmit={login} style={{ display: "grid", gap: 12 }}>
+        <input
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ padding: 10 }}
+          autoComplete="email"
+        />
+        <input
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={{ padding: 10 }}
+          type="password"
+          autoComplete="current-password"
+        />
 
-      {loading && <p>Loading...</p>}
-      {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
+        <button disabled={loading} style={{ padding: "10px 14px" }}>
+          {loading ? "Logging in..." : "Login"}
+        </button>
+      </form>
 
-      {!loading && !errorMsg && jobs.length === 0 && <p>No jobs yet.</p>}
-
-      {!loading && !errorMsg && jobs.length > 0 && (
-        <div style={{ display: "grid", gap: 12 }}>
-          {jobs.map((job) => (
-            <div
-              key={job.id}
-              style={{
-                border: "1px solid #ddd",
-                padding: 12,
-                borderRadius: 8,
-              }}
-            >
-              <Link href={`/owner/dashboard/job/${job.id}`}>
-                <strong>{job.service || "Job"}</strong>
-              </Link>
-              <div style={{ opacity: 0.8 }}>{job.status || "-"}</div>
-              {job.notes && <div style={{ marginTop: 6 }}>{job.notes}</div>}
-            </div>
-          ))}
-        </div>
-      )}
+      {msg && <p style={{ marginTop: 12, color: "crimson" }}>{msg}</p>}
+      <p style={{ marginTop: 14, opacity: 0.7 }}>
+        After login you will be redirected to <b>/owner/dashboard</b>
+      </p>
     </main>
   );
 }
