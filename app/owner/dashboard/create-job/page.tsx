@@ -18,11 +18,22 @@ export default function CreateJobPage() {
     setLoading(true);
     setMsg(null);
 
+    // ✅ Get current logged-in user so we can set created_by
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !userData?.user) {
+      setMsg("You are not logged in. Please login again.");
+      setLoading(false);
+      return;
+    }
+
+    const created_by = userData.user.id;
+
     const { error } = await supabase.from("jobs").insert([
       {
         service: service || null,
         notes: notes || null,
         status: status || "new",
+        created_by, // ✅ REQUIRED for your RLS policy
       },
     ]);
 
