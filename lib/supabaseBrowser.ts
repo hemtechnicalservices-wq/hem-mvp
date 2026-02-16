@@ -1,10 +1,10 @@
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
-export function createClient() {
+export function createClientBrowser() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-  return createSupabaseClient(url, anonKey, {
+  return createClient(url, anonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,

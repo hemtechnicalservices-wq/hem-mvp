@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { createClient } from "@/lib/supabaseBrowser";
+import { createClientBrowser } from "@/lib/supabaseBrowser";
+
+const supabase = createClientBrowser();
 
 type Job = {
   id: string;
@@ -14,12 +16,8 @@ type Job = {
 };
 
 export default function JobDetails() {
-  const supabase = createClient();
   const params = useParams();
-
-  // Next can return string | string[]
-  const rawId = (params as any)?.id;
-  const jobId = Array.isArray(rawId) ? rawId[0] : rawId;
+  const id = params?.id as string;
 
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,79 +25,61 @@ export default function JobDetails() {
 
   useEffect(() => {
     const loadJob = async () => {
-      if (!jobId) {
-        setErrorMsg("Missing job id");
-        setLoading(false);
-        return;
-      }
-
       setLoading(true);
       setErrorMsg(null);
 
       const { data, error } = await supabase
         .from("jobs")
         .select("id, service, notes, status, created_at")
-        .eq("id", jobId)
+        .eq("id", id)
         .single();
 
       if (error) {
         setErrorMsg(error.message);
         setJob(null);
-        setLoading(false);
-        return;
+      } else {
+        setJob(data as Job);
       }
 
-      setJob((data as Job) ?? null);
       setLoading(false);
     };
 
-    loadJob();
-  }, [jobId, supabase]);
-
-  if (loading) return <main style={{ padding: 40 }}>Loading...</main>;
-
-  if (errorMsg) {
-    return (
-      <main style={{ padding: 40 }}>
-        <h2>Job Details</h2>
-        <p style={{ color: "crimson" }}>{errorMsg}</p>
-        <Link href="/owner/dashboard">Back to Dashboard</Link>
-      </main>
-    );
-  }
-
-  if (!job) {
-    return (
-      <main style={{ padding: 40 }}>
-        <h2>Job not found</h2>
-        <Link href="/owner/dashboard">Back to Dashboard</Link>
-      </main>
-    );
-  }
+    if (id) loadJob();
+  }, [id]);
 
   return (
-    <main style={{ padding: 40 }}>
-      <h2>Job Details</h2>
+    <main style={{ padding: 24, maxWidth: 720 }}>
+      <div style={{ marginBottom: 12 }}>
+        <Link href="/owner">← Back to Dashboard</Link>
+      </div>
 
-      <p>
-        <strong>ID:</strong> {job.id}
-      </p>
-      <p>
-        <strong>Service:</strong> {job.service ?? "-"}
-      </p>
-      <p>
-        <strong>Status:</strong> {job.status ?? "-"}
-      </p>
-      <p>
-        <strong>Notes:</strong> {job.notes ?? "-"}
-      </p>
-      <p>
-        <strong>Created:</strong> {job.created_at ?? "-"}
-      </p>
+      <h1>Job Details</h1>
 
-      <br />
+      {loading && <p>Loading...</p>}
+      {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
 
-      <Link href="/owner/dashboard">← Back to Dashboard</Link>
+      {!loading && !errorMsg && job && (
+        <div style={{ border: "1px solid #ddd", padding: 14, borderRadius: 8 }}>
+          <div>
+            <strong>ID:</strong> {job.id}
+          </div>
+          <div>
+            <strong>Service:</strong> {job.service || "-"}
+          </div>
+          <div>
+            <strong>Status:</strong> {job.status || "-"}
+          </div>
+          <div>
+            <strong>Created:</strong> {job.created_at || "-"}
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <strong>Notes:</strong>
+            <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>
+              {job.notes || "-"}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

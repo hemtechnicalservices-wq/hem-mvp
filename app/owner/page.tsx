@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabaseBrowser";
+import { createClientBrowser } from "@/lib/supabaseBrowser";
+
+const supabase = createClientBrowser();
 
 type Job = {
-  id: string;              // ✅ this matches your Supabase column name: id (uuid)
+  id: string;
   service: string | null;
   notes: string | null;
   status: string | null;
@@ -13,8 +15,6 @@ type Job = {
 };
 
 export default function Dashboard() {
-  const supabase = createClient();
-
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -32,65 +32,49 @@ export default function Dashboard() {
       if (error) {
         setErrorMsg(error.message);
         setJobs([]);
-        setLoading(false);
-        return;
+      } else {
+        setJobs((data as Job[]) ?? []);
       }
 
-      setJobs((data as Job[]) ?? []);
       setLoading(false);
     };
 
     loadJobs();
-  }, [supabase]);
+  }, []);
 
   return (
-    <main style={{ padding: 24, maxWidth: 900 }}>
-      <h1 style={{ marginBottom: 12 }}>Owner Dashboard</h1>
+    <main style={{ padding: 24 }}>
+      <h1>Owner Dashboard</h1>
 
-      <div style={{ marginBottom: 16 }}>
-        <Link href="/owner/dashboard/create-job">+ Create Job</Link>
+      <div style={{ margin: "12px 0" }}>
+        <Link href="/owner/dashboard/create-job">Create Job</Link>
       </div>
 
-      {loading && <p>Loading…</p>}
-
-      {errorMsg && (
-        <p style={{ color: "crimson", whiteSpace: "pre-wrap" }}>{errorMsg}</p>
-      )}
+      {loading && <p>Loading...</p>}
+      {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
 
       {!loading && !errorMsg && jobs.length === 0 && <p>No jobs yet.</p>}
 
-      <div style={{ display: "grid", gap: 10 }}>
-        {jobs.map((job) => (
-          <div
-            key={job.id}
-            style={{
-              border: "1px solid #ddd",
-              borderRadius: 10,
-              padding: 12,
-              display: "grid",
-              gap: 6,
-            }}
-          >
-            <div>
-              <strong>ID:</strong> {job.id}
+      {!loading && !errorMsg && jobs.length > 0 && (
+        <div style={{ display: "grid", gap: 12 }}>
+          {jobs.map((job) => (
+            <div
+              key={job.id}
+              style={{
+                border: "1px solid #ddd",
+                padding: 12,
+                borderRadius: 8,
+              }}
+            >
+              <Link href={`/owner/dashboard/job/${job.id}`}>
+                <strong>{job.service || "Job"}</strong>
+              </Link>
+              <div style={{ opacity: 0.8 }}>{job.status || "-"}</div>
+              {job.notes && <div style={{ marginTop: 6 }}>{job.notes}</div>}
             </div>
-            <div>
-              <strong>Status:</strong> {job.status ?? "-"}
-            </div>
-            <div>
-              <strong>Service:</strong> {job.service ?? "-"}
-            </div>
-            <div>
-              <strong>Notes:</strong> {job.notes ?? "-"}
-            </div>
-
-            {/* ✅ THIS is the correct link */}
-            <div style={{ marginTop: 6 }}>
-              <Link href={`/owner/dashboard/job/${job.id}`}>View Job</Link>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </main>
   );
 }

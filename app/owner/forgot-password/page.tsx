@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabaseBrowser";
+import { createClientBrowser } from "@/lib/supabaseBrowser";
+
+const supabase = createClientBrowser();
 
 export default function ForgotPassword() {
-  const supabase = createClient();
-
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -43,7 +43,6 @@ export default function ForgotPassword() {
           required
           style={{ padding: 10 }}
         />
-
         <button disabled={loading} style={{ padding: "10px 14px" }}>
           {loading ? "Sending..." : "Send Reset Email"}
         </button>
