@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClientBrowser } from "@/lib/supabaseBrowser";
 
@@ -12,29 +12,34 @@ export default function CreateJobPage() {
   const [status, setStatus] = useState("new");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function checkUser() {
+      const { data } = await supabase.auth.getUser();
+      setUserId(data.user?.id ?? null);
+    }
+
+    checkUser();
+  }, []);
 
   const createJob = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setMsg(null);
 
-    // 🔑 Get logged in user
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setMsg("Not authenticated");
-      setLoading(false);
+    if (!userId) {
+      setMsg("You must be logged in.");
       return;
     }
 
+    setLoading(true);
+    setMsg(null);
+
     const { error } = await supabase.from("jobs").insert([
       {
-        service: service || null,
-        notes: notes || null,
-        status: status || "new",
-        created_by: user.id, // 🔥 REQUIRED FOR RLS
+        service,
+        notes,
+        status,
+        created_by: userId,
       },
     ]);
 
@@ -58,6 +63,12 @@ export default function CreateJobPage() {
         <Link href="/owner/dashboard">← Back to Dashboard</Link>
       </div>
 
+      {!userId && (
+        <p style={{ color: "red" }}>
+          Not authenticated — please login first.
+        </p>
+      )}
+
       <form onSubmit={createJob} style={{ display: "grid", gap: 12 }}>
         <input
           placeholder="Service"
@@ -73,12 +84,15 @@ export default function CreateJobPage() {
           style={{ padding: 10, minHeight: 120 }}
         />
 
-        <input
-          placeholder="Status (new / scheduled / done)"
+        <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
           style={{ padding: 10 }}
-        />
+        >
+          <option value="new">new</option>
+          <option value="scheduled">scheduled</option>
+          <option value="done">done</option>
+        </select>
 
         <button disabled={loading} style={{ padding: "10px 14px" }}>
           {loading ? "Creating..." : "Create"}
