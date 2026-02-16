@@ -22,16 +22,17 @@ export default function TechnicianDashboard() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    let mounted = true;
 
-    (async () => {
-      setLoading(true);
-      setErrorMsg(null);
-
+    const load = async () => {
       try {
-        const { data: authData, error: authErr } = await supabase.auth.getUser();
+        setLoading(true);
+        setErrorMsg(null);
 
-        if (authErr) throw authErr;
+        const { data: authData, error: authError } =
+          await supabase.auth.getUser();
+
+        if (authError) throw authError;
 
         const user = authData?.user;
         if (!user) {
@@ -47,44 +48,56 @@ export default function TechnicianDashboard() {
 
         if (error) throw error;
 
-        if (!cancelled) setJobs(data ?? []);
-      } catch (e: any) {
-        if (!cancelled) setErrorMsg(e?.message ?? "Failed to load jobs");
+        if (mounted) {
+          setJobs(data || []);
+        }
+      } catch (err: any) {
+        console.error("Dashboard error:", err);
+        setErrorMsg(err.message || "Something went wrong");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (mounted) setLoading(false);
       }
-    })();
+    };
+
+    load();
 
     return () => {
-      cancelled = true;
+      mounted = false;
     };
   }, [router, supabase]);
 
-  if (loading) return <div style={{ padding: 24 }}>Technician Dashboard<br />Loading...</div>;
+  if (loading) return <p style={{ padding: 40 }}>Loading dashboard...</p>;
+
+  if (errorMsg)
+    return (
+      <p style={{ padding: 40, color: "red" }}>
+        Error: {errorMsg}
+      </p>
+    );
 
   return (
-    <div style={{ padding: 24 }}>
+    <main style={{ padding: 40 }}>
       <h1>Technician Dashboard</h1>
 
-      {errorMsg && (
-        <p style={{ color: "red" }}>
-          {errorMsg}
-          <br />
-          If it says “permission denied” / “RLS”, it’s a Supabase policy issue.
-        </p>
+      {jobs.length === 0 ? (
+        <p>No jobs assigned.</p>
+      ) : (
+        jobs.map((job) => (
+          <div
+            key={job.id}
+            style={{
+              border: "1px solid #ccc",
+              padding: 16,
+              marginTop: 12,
+              borderRadius: 8,
+            }}
+          >
+            <strong>{job.service}</strong>
+            <p>Status: {job.status}</p>
+            <p>{job.notes}</p>
+          </div>
+        ))
       )}
-
-      {!errorMsg && jobs.length === 0 && <p>No jobs assigned yet.</p>}
-
-      <ul>
-        {jobs.map((j) => (
-          <li key={j.id}>
-            <b>{j.service ?? "Job"}</b> — {j.status ?? "new"} — {j.created_at ?? ""}
-            <br />
-            {j.notes ?? ""}
-          </li>
-        ))}
-      </ul>
-    </div>
+    </main>
   );
 }
