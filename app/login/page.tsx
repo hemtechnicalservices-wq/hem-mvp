@@ -1,69 +1,60 @@
 "use client";
 
 import { useState } from "react";
-import { createClientBrowser } from "@/lib/supabaseBrowser";
 import { useRouter } from "next/navigation";
+import { getSupabase } from "@/lib/supabaseBrowser";
 
 export default function LoginPage() {
-  const supabase = createClientBrowser();
+  const supabase = getSupabase();
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
     setLoading(true);
-    setError(null);
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
+    setLoading(false);
+
     if (error) {
-      setError(error.message);
-      setLoading(false);
+      alert(error.message);
       return;
     }
 
     router.push("/owner/dashboard");
-  };
+  }
 
   return (
-    <div style={{ maxWidth: 400, margin: "100px auto" }}>
-      <h1>Login</h1>
+    <form onSubmit={handleLogin} style={{ padding: 40 }}>
+      <h2>Login</h2>
 
       <input
-        type="email"
-        placeholder="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        style={{ width: "100%", padding: 8, marginBottom: 10 }}
+        placeholder="Email"
       />
+
+      <br /><br />
 
       <input
         type="password"
-        placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        style={{ width: "100%", padding: 8, marginBottom: 10 }}
+        placeholder="Password"
       />
 
-      <button
-        onClick={handleLogin}
-        disabled={loading}
-        style={{ width: "100%", padding: 10 }}
-      >
+      <br /><br />
+
+      <button type="submit" disabled={loading}>
         {loading ? "Logging in..." : "Login"}
       </button>
-
-      {error && (
-        <p style={{ color: "red", marginTop: 10 }}>
-          {error}
-        </p>
-      )}
-    </div>
+    </form>
   );
 }

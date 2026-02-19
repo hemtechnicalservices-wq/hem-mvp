@@ -2,65 +2,78 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClientBrowser } from "@/lib/supabaseBrowser";
+import { getSupabase } from "@/lib/supabaseBrowser";
+
+const supabase = getSupabase();
 
 export default function TechnicianLoginPage() {
-  const supabase = createClientBrowser();
   const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleLogin = async () => {
+  const login = async () => {
     setLoading(true);
-    setError(null);
+    setErrorMsg(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+      if (!data.session) throw new Error("No session returned.");
 
-    setLoading(false);
-
-    if (error) {
-      setError(error.message);
-      return;
+      router.replace("/technician/dashboard");
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? "Login failed");
+    } finally {
+      setLoading(false);
     }
-
-    router.push("/technician/dashboard");
   };
 
   return (
-    <main style={{ maxWidth: 420, margin: "100px auto", padding: 24 }}>
-      <h1>Technician Login</h1>
+    <main style={{ maxWidth: 420, margin: "80px auto", padding: 16 }}>
+      <h2 style={{ marginBottom: 8 }}>Technician Login</h2>
+      <div style={{ opacity: 0.8, marginBottom: 16 }}>
+        Sign in to see your jobs.
+      </div>
 
-      <input
-        style={{ width: "100%", padding: 10, marginTop: 12 }}
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
+      <label style={{ display: "block", marginBottom: 8 }}>
+        Email
+        <input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          style={{ width: "100%", padding: 10, marginTop: 6 }}
+          placeholder="Email"
+          autoComplete="email"
+        />
+      </label>
 
-      <input
-        style={{ width: "100%", padding: 10, marginTop: 12 }}
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+      <label style={{ display: "block", marginBottom: 12 }}>
+        Password
+        <input
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={{ width: "100%", padding: 10, marginTop: 6 }}
+          placeholder="Password"
+          type="password"
+          autoComplete="current-password"
+        />
+      </label>
+
+      {errorMsg && (
+        <div style={{ color: "crimson", marginBottom: 12 }}>{errorMsg}</div>
+      )}
 
       <button
-        style={{ width: "100%", padding: 12, marginTop: 14 }}
-        onClick={handleLogin}
-        disabled={loading}
+        onClick={login}
+        disabled={loading || !email || !password}
+        style={{ width: "100%", padding: 12 }}
       >
-        {loading ? "Signing in..." : "Login"}
+        {loading ? "Logging in..." : "Login"}
       </button>
-
-      {error && <p style={{ color: "red", marginTop: 12 }}>{error}</p>}
     </main>
   );
 }

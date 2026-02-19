@@ -1,224 +1,101 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClientBrowser } from "@/lib/supabaseBrowser";
+import { getSupabase } from "@/lib/supabaseBrowser";
+import type { Database } from "@/lib/database.types";
 
-type Job = {
-  id: string;
-  service: string | null;
-  notes: string | null;
-  status: string | null;
-  created_at: string | null;
+type TechnicianRow = Database["public"]["Tables"]["technicians"]["Row"];
 
-  started_at: string | null;
-  completed_at: string | null;
-  completed_notes: string | null;
-  completion_photos: string[] | null;
+type JobRow = Pick<
+  Database["public"]["Tables"]["jobs"]["Row"],
+  "id" | "service" | "status" | "notes" | "created_at" | "assigned_to"
+>;
 
-  assigned_to: string | null;
-  technician_id: string | null;
-};
+const supabase = getSupabase();
 
-export default function TechnicianDashboard() {
+export default function TechnicianDashboardPage() {
   const router = useRouter();
 
-  // IMPORTANT: memoize the client so it's stable (no infinite effect loop)
-  const supabase = useMemo(() => createClientBrowser(), []);
-
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // optional: track per-job update to avoid flipping global loading
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-
-  async function loadJobs() {
-    setErrorMsg(null);
-
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError) {
-      setErrorMsg(authError.message);
-      router.push("/technician/login");
-      return;
-    }
-
-    const user = authData?.user;
-    if (!user) {
-      router.push("/technician/login");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("jobs")
-      .select(
-        "id, service, notes, status, created_at, started_at, completed_at, completed_notes, completion_photos, assigned_to, technician_id"
-      )
-      .eq("assigned_to", user.id)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      setErrorMsg(error.message);
-      return;
-    }
-
-    setJobs((data as Job[]) ?? []);
-  }
+  const [, setLoading] = useState(true);
+  const [tech, setTech] = useState<TechnicianRow | null>(null);
+  const [jobs, setJobs] = useState<JobRow[]>([]);
+  const [, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
+  let cancelled = false;
 
-    (async () => {
-      try {
-        setLoading(true);
-        await loadJobs();
-      } finally {
-        if (active) setLoading(false);
+  const run = async () => {
+    try {
+      setLoading(true);
+      setErrorMsg(null);
+
+      // 1) Must have logged-in session
+      const { data, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr) throw sessionErr;
+
+      const session = data.session;
+      if (!session?.user) {
+        router.replace("/technician/login");
+        return;
       }
-    })();
 
-    return () => {
-      active = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run ONCE
+      const userId = session.user.id;
 
-  async function setInProgress(jobId: string) {
-    setUpdatingId(jobId);
-    setErrorMsg(null);
+      // 2) Load technician profile (linked by user_id)
+      const { data: techRow, error: techErr } = await supabase
+        .from("technicians")
+        .select("id,user_id,full_name,role,is_active")
+        .eq("user_id", userId)
+        .maybeSingle<TechnicianRow>();
 
-    const { error } = await supabase
-      .from("jobs")
-      .update({
-        status: "in_progress",
-        started_at: new Date().toISOString(),
-      })
-      .eq("id", jobId);
+      if (techErr) throw techErr;
 
-    if (error) {
-      setErrorMsg(error.message);
-      setUpdatingId(null);
-      return;
+      if (!techRow) {
+        if (!cancelled) {
+          setErrorMsg(
+            "No technician profile found for this account (technicians.user_id not linked)."
+          );
+          setTech(null);
+          setJobs([]);
+        }
+        return;
+      }
+
+      if (techRow.is_active === false) {
+        if (!cancelled) {
+          setErrorMsg("Your technician profile is not active.");
+          setTech(techRow);
+          setJobs([]);
+        }
+        return;
+      }
+
+      if (!cancelled) setTech(techRow);
+
+      // 3) Load assigned jobs (assigned_to = technicians.id)
+      const { data: jobRows, error: jobsErr } = await supabase
+        .from("jobs")
+        .select("id,service,status,notes,created_at,assigned_to")
+        .eq("assigned_to", techRow.id)
+        .order("created_at", { ascending: false });
+
+      if (jobsErr) throw jobsErr;
+
+      if (!cancelled) setJobs((jobRows ?? []) as JobRow[]);
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error ? e.message : typeof e === "string" ? e : "Unknown error";
+      if (!cancelled) setErrorMsg(msg);
+    } finally {
+      if (!cancelled) setLoading(false);
     }
+  };
 
-    // update UI without reloading everything
-    setJobs((prev) =>
-      prev.map((j) =>
-        j.id === jobId
-          ? { ...j, status: "in_progress", started_at: new Date().toISOString() }
-          : j
-      )
-    );
+  run();
 
-    setUpdatingId(null);
-  }
-
-  async function setCompleted(jobId: string) {
-    setUpdatingId(jobId);
-    setErrorMsg(null);
-
-    const { error } = await supabase
-      .from("jobs")
-      .update({
-        status: "done",
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", jobId);
-
-    if (error) {
-      setErrorMsg(error.message);
-      setUpdatingId(null);
-      return;
-    }
-
-    setJobs((prev) =>
-      prev.map((j) =>
-        j.id === jobId
-          ? { ...j, status: "done", completed_at: new Date().toISOString() }
-          : j
-      )
-    );
-
-    setUpdatingId(null);
-  }
-
-  async function logout() {
-    await supabase.auth.signOut();
-    router.push("/technician/login");
-  }
-
-  return (
-    <div style={{ maxWidth: 900, margin: "30px auto", padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <h2 style={{ margin: 0 }}>Technician Dashboard</h2>
-          {loading ? (
-            <div style={{ marginTop: 6, opacity: 0.7 }}>Loading…</div>
-          ) : null}
-        </div>
-
-        <button onClick={logout} style={{ height: 36 }}>
-          Logout
-        </button>
-      </div>
-
-      {errorMsg ? (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 12,
-            border: "1px solid #f3c",
-            borderRadius: 8,
-          }}
-        >
-          {errorMsg}
-        </div>
-      ) : null}
-
-      <div style={{ marginTop: 18 }}>
-        {!loading && jobs.length === 0 ? (
-          <div style={{ opacity: 0.7 }}>No jobs assigned yet.</div>
-        ) : null}
-
-        {jobs.map((job) => (
-          <div
-            key={job.id}
-            style={{
-              border: "1px solid #ddd",
-              borderRadius: 10,
-              padding: 14,
-              marginBottom: 12,
-            }}
-          >
-            <div style={{ fontWeight: 700 }}>{job.service ?? "No service"}</div>
-            <div style={{ opacity: 0.8, marginTop: 4 }}>
-              {job.notes ?? "No notes"}
-            </div>
-
-            <div style={{ marginTop: 10 }}>
-              <b>Status:</b> {job.status ?? "unknown"}
-            </div>
-
-            <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
-              <button
-                onClick={() => setInProgress(job.id)}
-                disabled={updatingId === job.id || job.status === "in_progress"}
-              >
-                {updatingId === job.id ? "Updating…" : "In Progress"}
-              </button>
-
-              <button
-                onClick={() => setCompleted(job.id)}
-                disabled={updatingId === job.id || job.status === "done"}
-              >
-                {updatingId === job.id ? "Updating…" : "Completed"}
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+  return () => {
+    cancelled = true;
+  };
+}, [router]);

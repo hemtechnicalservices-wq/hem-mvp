@@ -1,127 +1,125 @@
-"use client";
+ "use client";
 
-import { useEffect, useState, FormEvent } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClientBrowser } from "@/lib/supabaseBrowser";
+import { getSupabase } from "@/lib/supabaseBrowser";
+import type { Database } from "@/lib/database.types";
 
-export default function CreateJobPage() {
-  const supabase = createClientBrowser();
+const supabase = getSupabase();
+
+type JobsInsert = Database["public"]["Tables"]["jobs"]["Insert"];
+type JobStatus = NonNullable<
+  Database["public"]["Tables"]["jobs"]["Row"]["status"]
+>;
+
+export default function OwnerCreateJobPage() {
   const router = useRouter();
 
   const [service, setService] = useState("");
   const [notes, setNotes] = useState("");
-  const [status, setStatus] = useState<"new" | "scheduled" | "done">("new");
-
+  const [status, setStatus] = useState<JobStatus>("new");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    let alive = true;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!data?.user) router.push("/owner/login");
+    })();
+  }, [router]);
 
-    const checkUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!alive) return;
-
-      setUserId(user?.id ?? null);
-
-      // If not logged in, send to owner login
-      if (!user) router.push("/owner/login");
-    };
-
-    checkUser();
-
-    return () => {
-      alive = false;
-    };
-  }, [router, supabase]);
-
-  const createJob = async (e: FormEvent) => {
+  const onCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setMsg(null);
 
-    if (!userId) {
-      setMsg("You must be logged in.");
-      return;
-    }
+    const cleanService = service.trim();
+    const cleanNotes = notes.trim();
 
-    if (!service.trim()) {
+    if (!cleanService) {
       setMsg("Service is required.");
       return;
     }
 
+    setLoading(true);
     try {
-      setLoading(true);
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) {
+        router.push("/owner/login");
+        return;
+      }
 
-      const { error } = await supabase.from("jobs").insert([
-        {
-          service: service.trim(),
-          notes: notes.trim() || null,
-          status,
-          created_by: userId,
-          created_at: new Date().toISOString(),
-        },
-      ]);
+      const payload: JobsInsert = {
+        service: cleanService,
+        notes: cleanNotes || null,
+        status,
+        created_by: userData.user.id,
+      };
 
+      const { error } = await supabase.from("jobs").insert(payload);
       if (error) throw error;
 
-      setMsg("Job created ✅");
       setService("");
       setNotes("");
       setStatus("new");
-
-      // optional: go back to dashboard after success
-      // router.push("/owner/dashboard");
-    } catch (e: any) {
-      setMsg(e?.message ?? "Failed to create job");
+      setMsg("✅ Job created.");
+    } catch (err: any) {
+      setMsg(err?.message ?? "Failed to create job.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main style={{ padding: 24, maxWidth: 520 }}>
-      <h1>Create Job</h1>
-
-      <div style={{ margin: "12px 0" }}>
-        <Link href="/owner/dashboard">← Back to Dashboard</Link>
+    <main style={{ padding: 20, maxWidth: 640 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+        <h2 style={{ margin: 0 }}>Create Job</h2>
+        <button onClick={() => router.push("/owner/dashboard/jobs")}>
+          Jobs
+        </button>
       </div>
 
-      <form onSubmit={createJob} style={{ display: "grid", gap: 12 }}>
-        <input
-          placeholder="Service"
-          value={service}
-          onChange={(e) => setService(e.target.value)}
-          style={{ padding: 10 }}
-        />
+      <form onSubmit={onCreate} style={{ marginTop: 16, display: "grid", gap: 12 }}>
+        <label style={{ display: "grid", gap: 6 }}>
+          <span>Service</span>
+          <input
+            value={service}
+            onChange={(e) => setService(e.target.value)}
+            placeholder="e.g. AC maintenance"
+            style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
+          />
+        </label>
 
-        <textarea
-          placeholder="Notes"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          style={{ padding: 10, minHeight: 120 }}
-        />
+        <label style={{ display: "grid", gap: 6 }}>
+          <span>Notes</span>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Optional notes"
+            rows={4}
+            style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
+          />
+        </label>
 
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as any)}
-          style={{ padding: 10 }}
-        >
-          <option value="new">new</option>
-          <option value="scheduled">scheduled</option>
-          <option value="done">done</option>
-        </select>
+        <label style={{ display: "grid", gap: 6 }}>
+          <span>Status</span>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as JobStatus)}
+            style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
+          >
+            <option value="new">new</option>
+            <option value="scheduled">scheduled</option>
+            <option value="in_progress">in_progress</option>
+            <option value="done">done</option>
+          </select>
+        </label>
 
-        <button disabled={loading} style={{ padding: "10px 14px" }}>
+        <button disabled={loading} style={{ padding: 12, borderRadius: 10 }}>
           {loading ? "Creating…" : "Create"}
         </button>
-      </form>
 
-      {msg && <p style={{ marginTop: 12 }}>{msg}</p>}
+        {msg && <p style={{ margin: 0 }}>{msg}</p>}
+      </form>
     </main>
   );
 }

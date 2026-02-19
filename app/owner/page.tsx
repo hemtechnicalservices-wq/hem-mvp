@@ -2,26 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClientBrowser } from "@/lib/supabaseBrowser";
+import { getSupabase } from "@/lib/supabaseBrowser";
 
 export default function OwnerLoginPage() {
-  const supabase = createClientBrowser();
+  const supabase = getSupabase();
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // If already logged in, go to dashboard
+  // If already logged in → go to dashboard
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getSession();
-      if (data.session) router.replace("/owner/dashboard");
+      if (data.session) {
+        router.replace("/owner/dashboard");
+      }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router, supabase]);
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,46 +33,42 @@ export default function OwnerLoginPage() {
       password,
     });
 
+    setLoading(false);
+
     if (error) {
       setMsg(error.message);
-    } else {
-      router.push("/owner/dashboard");
-      router.refresh();
+      return;
     }
 
-    setLoading(false);
+    router.push("/owner/dashboard");
   };
 
   return (
-    <main style={{ padding: 24, maxWidth: 420 }}>
-      <h1 style={{ marginBottom: 12 }}>Owner Login</h1>
+    <form onSubmit={login} style={{ padding: 40 }}>
+      <h2>Owner Login</h2>
 
-      <form onSubmit={login} style={{ display: "grid", gap: 12 }}>
-        <input
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ padding: 10 }}
-          autoComplete="email"
-        />
-        <input
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ padding: 10 }}
-          type="password"
-          autoComplete="current-password"
-        />
+      <input
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+      />
 
-        <button disabled={loading} style={{ padding: "10px 14px" }}>
-          {loading ? "Logging in..." : "Login"}
-        </button>
-      </form>
+      <br /><br />
 
-      {msg && <p style={{ marginTop: 12, color: "crimson" }}>{msg}</p>}
-      <p style={{ marginTop: 14, opacity: 0.7 }}>
-        After login you will be redirected to <b>/owner/dashboard</b>
-      </p>
-    </main>
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+      />
+
+      <br /><br />
+
+      <button type="submit" disabled={loading}>
+        {loading ? "Logging in..." : "Login"}
+      </button>
+
+      {msg && <p style={{ color: "red" }}>{msg}</p>}
+    </form>
   );
 }

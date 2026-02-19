@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { createClientBrowser } from "@/lib/supabaseBrowser";
+import { getSupabase } from "@/lib/supabaseBrowser";
 
-const supabase = createClientBrowser();
+const supabase = getSupabase();
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -24,31 +24,33 @@ export default function ForgotPassword() {
       redirectTo,
     });
 
-    if (error) setMessage(error.message);
-    else setMessage("Password reset email sent. Check your inbox/spam.");
-
     setLoading(false);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setMessage("Password reset email sent. Check your inbox.");
   };
 
   return (
-    <main style={{ padding: 24, maxWidth: 420 }}>
+    <main style={{ maxWidth: 420, margin: "100px auto" }}>
       <h1>Forgot Password</h1>
 
       <form onSubmit={handleReset} style={{ display: "grid", gap: 12 }}>
         <input
-          type="email"
-          placeholder="Enter your email"
+          placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          required
-          style={{ padding: 10 }}
+          autoComplete="email"
         />
-        <button disabled={loading} style={{ padding: "10px 14px" }}>
-          {loading ? "Sending..." : "Send Reset Email"}
+        <button disabled={loading} type="submit">
+          {loading ? "Sending..." : "Send reset email"}
         </button>
       </form>
 
-      {message && <p style={{ marginTop: 12 }}>{message}</p>}
+      {message && <p>{message}</p>}
     </main>
   );
 }

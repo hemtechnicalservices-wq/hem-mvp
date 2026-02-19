@@ -1,53 +1,64 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClientBrowser } from "@/lib/supabaseBrowser";
+import { useRouter } from "next/navigation";
+import { getSupabase } from "@/lib/supabaseBrowser";
+
+const supabase = getSupabase();
 
 export default function ResetPassword() {
-  const supabase = createClientBrowser();
+  const router = useRouter();
 
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    // Helps when Supabase returns with tokens in the URL after clicking the email link
-    supabase.auth.getSession();
+    // Ensure user arrived from email link and session is available
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        setMsg("Open the reset link from your email again.");
+      }
+    })();
   }, []);
 
-  const handleUpdate = async (e: React.FormEvent) => {
+  const updatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setMessage(null);
+    setMsg(null);
 
     const { error } = await supabase.auth.updateUser({ password });
 
-    if (error) setMessage(error.message);
-    else setMessage("Password updated successfully ✅");
-
     setLoading(false);
+
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
+
+    setMsg("Password updated. Redirecting...");
+    router.replace("/owner/login");
   };
 
   return (
-    <main style={{ padding: 24, maxWidth: 420 }}>
+    <main style={{ maxWidth: 420, margin: "100px auto" }}>
       <h1>Reset Password</h1>
 
-      <form onSubmit={handleUpdate} style={{ display: "grid", gap: 12 }}>
+      <form onSubmit={updatePassword} style={{ display: "grid", gap: 12 }}>
         <input
-          type="password"
-          placeholder="Enter new password"
+          placeholder="New password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          required
-          style={{ padding: 10 }}
+          type="password"
+          autoComplete="new-password"
         />
-
-        <button type="submit" disabled={loading} style={{ padding: "10px 14px" }}>
-          {loading ? "Updating..." : "Update Password"}
+        <button disabled={loading} type="submit">
+          {loading ? "Updating..." : "Update password"}
         </button>
       </form>
 
-      {message && <p style={{ marginTop: 12 }}>{message}</p>}
+      {msg && <p>{msg}</p>}
     </main>
   );
 }
