@@ -46,13 +46,11 @@ export default function JobDetailsPage() {
         }
 
         // Load job
-        const { data: jobRow, error: jobErr } = await supabase
-          .from("jobs")
-          .select(
-            "id,service,notes,status,created_at,assigned_to,started_at,completed_at"
-          )
-          .eq("id", jobId)
-          .maybeSingle();
+const { data: jobRow, error: jobErr } = await supabase
+  .from("jobs")
+  .select("*")
+  .eq("id", jobId)
+  .single();
 
         if (jobErr) throw jobErr;
 
@@ -70,15 +68,15 @@ export default function JobDetailsPage() {
         }
 
         // Load active technicians
-        const { data: techRows, error: techErr } = await supabase
-          .from("technicians")
-          .select("id,user_id,full_name,role,is_active")
-          .eq("is_active", true)
-          .order("full_name", { ascending: true });
+const { data: techRows, error: techErr } = await supabase
+  .from("technicians")
+  .select("id,full_name,role,is_active") // ✅ removed user_id
+  .eq("is_active", true)
+  .order("full_name", { ascending: true });
 
-        if (techErr) throw techErr;
+if (techErr) throw techErr;
 
-        if (!cancelled) setTechs(techRows ?? []);
+if (!cancelled) setTechs(techRows ?? []);
       } catch (e: unknown) {
         const msg =
           e instanceof Error
@@ -189,21 +187,31 @@ export default function JobDetailsPage() {
             </label>
 
             <label>
-              <strong>Update Status</strong>
-              <div style={{ marginTop: 6 }}>
-                <select
-                  value={job.status ?? ""}
-                  onChange={(e) => updateJob({ status: e.target.value || null })}
-                  style={{ padding: 8, minWidth: 280 }}
-                >
-                  <option value="">—</option>
-                  <option value="new">new</option>
-                  <option value="in_progress">in_progress</option>
-                  <option value="done">done</option>
-                  <option value="cancelled">cancelled</option>
-                </select>
-              </div>
-            </label>
+  <strong>Update Status</strong>
+
+  <div style={{ marginTop: 6 }}>
+    <select
+      value={job?.status ?? ""}
+      onChange={(e) =>
+        updateJob({
+          status: (e.target.value || null) as
+            | "new"
+            | "scheduled"
+            | "in_progress"
+            | "done"
+            | null,
+        })
+      }
+      style={{ padding: 8, minWidth: 280 }}
+    >
+      <option value="">--</option>
+      <option value="new">new</option>
+      <option value="scheduled">scheduled</option>
+      <option value="in_progress">in_progress</option>
+      <option value="done">done</option>
+    </select>
+  </div>
+</label>
           </div>
         </div>
       )}

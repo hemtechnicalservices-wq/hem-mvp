@@ -74,19 +74,26 @@ export default function TechnicianDashboardPage() {
 
       if (!cancelled) setTech(techRow);
 
-      // 3) Load assigned jobs (assigned_to = technicians.id)
+      // 3) Load assigned jobs (assigned_to = technician id)
       const { data: jobRows, error: jobsErr } = await supabase
         .from("jobs")
-        .select("id,service,status,notes,created_at,assigned_to")
+        .select("id, service, status, notes, created_at, assigned_to")
         .eq("assigned_to", techRow.id)
         .order("created_at", { ascending: false });
 
       if (jobsErr) throw jobsErr;
 
-      if (!cancelled) setJobs((jobRows ?? []) as JobRow[]);
+      if (!cancelled) {
+        setJobs((jobRows ?? []) as JobRow[]);
+      }
     } catch (e: unknown) {
       const msg =
-        e instanceof Error ? e.message : typeof e === "string" ? e : "Unknown error";
+        e instanceof Error
+          ? e.message
+          : typeof e === "string"
+          ? e
+          : "Unexpected error";
+
       if (!cancelled) setErrorMsg(msg);
     } finally {
       if (!cancelled) setLoading(false);
@@ -99,3 +106,4 @@ export default function TechnicianDashboardPage() {
     cancelled = true;
   };
 }, [router]);
+}
