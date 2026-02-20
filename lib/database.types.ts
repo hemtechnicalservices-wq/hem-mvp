@@ -83,10 +83,12 @@ export interface Database {
         Row: {
           is_active: boolean;
           role: any;
-          full_name: string; id: string 
+          full_name: string;
+          id: string;
+          user_id: string | null;
 };
-        Insert: { id: string };
-        Update: { id?: string };
+        Insert: { id: string; user_id?: string | null };
+        Update: { id?: string; user_id?: string | null };
         Relationships: [];
       };
     };

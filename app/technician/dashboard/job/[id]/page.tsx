@@ -38,7 +38,7 @@ export default function JobDetailsPage() {
         } = await supabase.auth.getSession();
 
         if (!session?.user) {
-          router.replace("/owner/login");
+          router.replace("/technician/login");
           return;
         }
 
