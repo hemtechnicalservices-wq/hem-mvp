@@ -68,15 +68,15 @@ const { data: jobRow, error: jobErr } = await supabase
         }
 
         // Load active technicians
-const { data: techRows, error: techErr } = await supabase
-  .from("technicians")
-  .select("id,full_name,role,is_active") // ✅ removed user_id
-  .eq("is_active", true)
-  .order("full_name", { ascending: true });
+        const { data: techRows, error: techErr } = await supabase
+          .from("technicians")
+          .select("id,user_id,full_name,role,is_active")
+          .eq("is_active", true)
+          .order("full_name", { ascending: true });
 
-if (techErr) throw techErr;
+        if (techErr) throw techErr;
 
-if (!cancelled) setTechs(techRows ?? []);
+        if (!cancelled) setTechs(techRows ?? []);
       } catch (e: unknown) {
         const msg =
           e instanceof Error
