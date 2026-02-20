@@ -18,6 +18,7 @@ export default function OwnerLoginPage() {
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("owner login clicked", { email, password });
     setLoading(true);
     setMsg(null);
 

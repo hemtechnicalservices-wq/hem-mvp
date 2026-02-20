@@ -14,6 +14,7 @@ export default function TechnicianLoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const login = async () => {
+    console.log("login clicked", { email, password });
     setLoading(true);
     setErrorMsg(null);
 
