@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabaseBrowser";
+import { createClient } from "@/lib/supabase/browser";
 import type { Database } from "@/lib/database.types";
 
 type TechnicianRow = Database["public"]["Tables"]["technicians"]["Row"];
@@ -13,7 +13,7 @@ type JobRow = Pick<
   "id" | "service" | "status" | "notes" | "created_at" | "assigned_to"
 >;
 
-const supabase = getSupabase();
+const supabase = createClient();
 
 export default function TechnicianDashboardPage() {
   const router = useRouter();
@@ -48,7 +48,7 @@ export default function TechnicianDashboardPage() {
         .from("technicians")
         .select("id,user_id,full_name,role,is_active")
         .eq("user_id", userId)
-        .maybeSingle<TechnicianRow>();
+        .maybeSingle();
 
       if (techErr) throw techErr;
 

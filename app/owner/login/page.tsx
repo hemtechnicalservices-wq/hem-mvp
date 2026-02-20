@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabaseBrowser";
+import { createClient, getSupabase } from "@/lib/supabase/browser";
 
-const supabase = getSupabase();
+const supabase = createClient();
 
 export default function OwnerLoginPage() {
   const router = useRouter();
@@ -14,12 +14,7 @@ export default function OwnerLoginPage() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) router.replace("/owner/dashboard");
-    })();
-  }, [router]);
+
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault();
