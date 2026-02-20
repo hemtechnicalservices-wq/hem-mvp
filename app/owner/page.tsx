@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabaseBrowser";
+import { getSupabase } from "@/lib/supabase/browser";
 
 export default function OwnerLoginPage() {
   const supabase = getSupabase();

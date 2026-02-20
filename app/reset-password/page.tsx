@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabaseBrowser";
+import { getSupabase } from "@/lib/supabase/browser";
 
 function parseHashParams(hash: string) {
   // hash example: "#access_token=...&refresh_token=...&type=recovery"

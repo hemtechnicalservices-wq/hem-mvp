@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabaseBrowser";
+import { getSupabase } from "@/lib/supabase/browser";
 import type { Database } from "@/lib/database.types";
 
 const supabase = getSupabase();

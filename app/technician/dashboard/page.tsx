@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/browser";
+import { getSupabase } from "@/lib/supabase/browser";
 import type { Database } from "@/lib/database.types";
 
 type TechnicianRow = Database["public"]["Tables"]["technicians"]["Row"];
@@ -13,7 +13,7 @@ type JobRow = Pick<
   "id" | "service" | "status" | "notes" | "created_at" | "assigned_to"
 >;
 
-const supabase = createClient();
+const supabase = getSupabase();
 
 export default function TechnicianDashboardPage() {
   const router = useRouter();
@@ -43,10 +43,10 @@ export default function TechnicianDashboardPage() {
 
       const userId = session.user.id;
 
-      // 2) Load technician profile (linked by user_id)
+      // 2) Load technician profile (id matches auth user id)
       const { data: techRow, error: techErr } = await supabase
         .from("technicians")
-        .select("id,user_id,full_name,role,is_active")
+        .select("id,full_name,role,is_active")
         .eq("user_id", userId)
         .maybeSingle();
 
@@ -54,9 +54,7 @@ export default function TechnicianDashboardPage() {
 
       if (!techRow) {
         if (!cancelled) {
-          setErrorMsg(
-            "No technician profile found for this account (technicians.user_id not linked)."
-          );
+          setErrorMsg("No technician profile found for this account.");
           setTech(null);
           setJobs([]);
         }

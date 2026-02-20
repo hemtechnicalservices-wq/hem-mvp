@@ -1,11 +1,11 @@
 "use client";
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
 
 let supabaseClient: SupabaseClient<Database> | null = null;
 
-export function getSupabase() {
+export function getSupabase(): SupabaseClient<Database> {
   if (supabaseClient) return supabaseClient;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -17,17 +17,17 @@ export function getSupabase() {
     );
   }
 
-  supabaseClient = createClient<Database>(url, anonKey, {
+  supabaseClient = createSupabaseClient(url, anonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
     },
-  });
+  }) as SupabaseClient<Database>;
 
   return supabaseClient;
 }
 
-export function createClient() {
+export function createClient(): SupabaseClient<Database> {
   return getSupabase();
 }

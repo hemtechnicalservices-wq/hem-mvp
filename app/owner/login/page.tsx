@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient, getSupabase } from "@/lib/supabase/browser";
+import { getSupabase } from "@/lib/supabase/browser";
 
-const supabase = createClient();
+const supabase = getSupabase();
 
 export default function OwnerLoginPage() {
   const router = useRouter();
