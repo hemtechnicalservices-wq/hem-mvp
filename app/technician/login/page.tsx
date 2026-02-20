@@ -14,9 +14,14 @@ export default function TechnicianLoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const login = async () => {
-    console.log("login clicked", { email, password });
     setLoading(true);
     setErrorMsg(null);
+
+    if (!email || !password) {
+      setErrorMsg("Email and password are required.");
+      setLoading(false);
+      return;
+    }
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -46,9 +51,11 @@ export default function TechnicianLoginPage() {
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onInput={(e) => setEmail(e.currentTarget.value)}
           style={{ width: "100%", padding: 10, marginTop: 6 }}
           placeholder="Email"
           autoComplete="email"
+          name="email"
         />
       </label>
 
@@ -57,10 +64,12 @@ export default function TechnicianLoginPage() {
         <input
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onInput={(e) => setPassword(e.currentTarget.value)}
           style={{ width: "100%", padding: 10, marginTop: 6 }}
           placeholder="Password"
           type="password"
           autoComplete="current-password"
+          name="password"
         />
       </label>
 
@@ -70,7 +79,7 @@ export default function TechnicianLoginPage() {
 
       <button
         onClick={login}
-        disabled={loading || !email || !password}
+        disabled={loading}
         style={{ width: "100%", padding: 12 }}
       >
         {loading ? "Logging in..." : "Login"}

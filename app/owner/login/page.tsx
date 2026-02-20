@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase/browser";
 
@@ -18,9 +18,14 @@ export default function OwnerLoginPage() {
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("owner login clicked", { email, password });
     setLoading(true);
     setMsg(null);
+
+    if (!email || !password) {
+      setMsg("Email and password are required.");
+      setLoading(false);
+      return;
+    }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
@@ -43,14 +48,18 @@ export default function OwnerLoginPage() {
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onInput={(e) => setEmail(e.currentTarget.value)}
           autoComplete="email"
+          name="email"
         />
         <input
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onInput={(e) => setPassword(e.currentTarget.value)}
           type="password"
           autoComplete="current-password"
+          name="password"
         />
         <button disabled={loading} type="submit">
           {loading ? "Logging in..." : "Login"}
