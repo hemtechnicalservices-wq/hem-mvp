@@ -55,7 +55,9 @@ export default function OwnerCreateJobPage() {
         created_by: userData.user.id,
       };
 
-      const { error } = await supabase.from("jobs").insert(payload);
+      const { error } = await supabase
+  .from("jobs")
+  .insert([payload]);
       if (error) throw error;
 
       setService("");
