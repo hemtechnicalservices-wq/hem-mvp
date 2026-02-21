@@ -1,33 +1,30 @@
 "use client";
 
-import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "../database.types";
+import { createClient } from "@supabase/supabase-js";
 
-let supabaseClient: SupabaseClient<Database> | null = null;
+let supabase: ReturnType<typeof createClient> | null = null;
 
-export function getSupabase(): SupabaseClient<Database> {
-  if (supabaseClient) return supabaseClient;
+export function getSupabase() {
+  if (supabase) return supabase;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-  if (!url || !anonKey) {
+  if (!url || !anon) {
     throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local"
+      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
     );
   }
 
-  supabaseClient = createSupabaseClient(url, anonKey, {
+  supabase = createClient(url, anon, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
     },
-  }) as SupabaseClient<Database>;
+  });
 
-  return supabaseClient;
+  return supabase;
 }
 
-export function createClient(): SupabaseClient<Database> {
-  return getSupabase();
-}
+export { createClient };
