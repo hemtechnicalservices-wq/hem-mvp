@@ -1,42 +1,53 @@
-// proxy.ts
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-const OWNER_PROTECTED = ["/owner/dashboard"];
-const TECH_PROTECTED = ["/technician/dashboard"];
+export async function proxy(req: NextRequest) {
+  let res = NextResponse.next();
 
-function isProtected(pathname: string) {
-  return (
-    OWNER_PROTECTED.some((p) => pathname.startsWith(p)) ||
-    TECH_PROTECTED.some((p) => pathname.startsWith(p))
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return req.cookies.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          res.cookies.set({ name, value, ...options });
+        },
+        remove(name: string, options: CookieOptions) {
+          res.cookies.set({ name, value: "", ...options, maxAge: 0 });
+        },
+      },
+    }
   );
-}
 
-export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { data } = await supabase.auth.getSession();
+  const session = data.session;
 
-  if (!isProtected(pathname)) {
-    return NextResponse.next();
+  const pathname = req.nextUrl.pathname;
+
+  const isPublic =
+    pathname === "/owner/login" ||
+    pathname === "/technician/login" ||
+    pathname.startsWith("/owner/reset-password") ||
+    pathname.startsWith("/technician/reset-password");
+
+  if (isPublic) return res;
+
+  if (pathname.startsWith("/owner") && !session) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/owner/login";
+    return NextResponse.redirect(url);
   }
 
-  // Supabase stores session in cookies. This checks that *some* auth cookie exists.
-  // If you later want stricter checks, we can validate via SSR client.
-  const hasAuthCookie =
-    request.cookies.get("sb-access-token") ||
-    request.cookies.get("sb-refresh-token") ||
-    // newer cookie names in some setups:
-    [...request.cookies.getAll()].some((c) => c.name.includes("sb-") && c.name.includes("auth-token"));
-
-  if (!hasAuthCookie) {
-    const loginUrl = request.nextUrl.clone();
-
-    if (pathname.startsWith("/technician")) loginUrl.pathname = "/technician/login";
-    else loginUrl.pathname = "/owner/login";
-
-    return NextResponse.redirect(loginUrl);
+  if (pathname.startsWith("/technician") && !session) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/technician/login";
+    return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  return res;
 }
 
 export const config = {

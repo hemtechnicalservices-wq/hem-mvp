@@ -1,46 +1,25 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useEffect, useState } from "react";
 
-type RequireAuthProps = {
-  children: ReactNode;
-  redirectTo?: string;
-};
-
-export default function RequireAuth({
-  children,
-  redirectTo = "/login",
-}: RequireAuthProps) {
-  const router = useRouter();
-  const supabase = createClient();
-  const [loading, setLoading] = useState(true);
+export default function OwnerDashboard() {
+  const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!mounted) return;
-
-      if (!session) {
-        router.replace(redirectTo);
-        return;
-      }
-
-      setLoading(false);
-    })();
-
-    return () => {
-      mounted = false;
+    const loadUser = async () => {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getUser();
+      setEmail(data.user?.email ?? null);
     };
-  }, [router, supabase, redirectTo]);
 
-  if (loading) return null;
+    loadUser();
+  }, []);
 
-  return <>{children}</>;
+  return (
+    <div style={{ padding: 40 }}>
+      <h1>Owner Dashboard</h1>
+      <p>Welcome: {email}</p>
+    </div>
+  );
 }
