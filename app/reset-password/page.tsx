@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabase/browser";
+import { createClient } from "@/lib/supabase/client";
 
 function parseHashParams(hash: string) {
   // hash example: "#access_token=...&refresh_token=...&type=recovery"
@@ -19,7 +19,7 @@ function parseHashParams(hash: string) {
 }
 
 export default function ResetPasswordPage() {
-  const supabase = useMemo(() => getSupabase(), []);
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
   const [ready, setReady] = useState(false);

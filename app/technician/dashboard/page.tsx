@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/browser";
+import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 
 type TechnicianRow = Database["public"]["Tables"]["technicians"]["Row"];
@@ -22,7 +22,10 @@ export default function TechnicianDashboardPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    const supabase = createClient();
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
 
     const run = async () => {
       setLoading(true);

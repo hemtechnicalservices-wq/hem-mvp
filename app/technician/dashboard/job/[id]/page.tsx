@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabase/browser";
+import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/database.types";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type JobUpdate = Database["public"]["Tables"]["jobs"]["Update"];
 type TechnicianRow = Database["public"]["Tables"]["technicians"]["Row"];
 
-const supabase = getSupabase();
+const supabase = createClient();
 
 export default function JobDetailsPage() {
   const params = useParams();

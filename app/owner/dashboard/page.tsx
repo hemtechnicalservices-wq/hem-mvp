@@ -1,29 +1,46 @@
 "use client";
 
+import { ReactNode, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabase/client";
-import RequireAuth from "../../components/RequireAuth";
+import { createClient } from "@/lib/supabase/client";
 
-export default function OwnerDashboardPage() {
+type RequireAuthProps = {
+  children: ReactNode;
+  redirectTo?: string;
+};
+
+export default function RequireAuth({
+  children,
+  redirectTo = "/login",
+}: RequireAuthProps) {
   const router = useRouter();
-  const supabase = getSupabase();
+  const supabase = createClient();
+  const [loading, setLoading] = useState(true);
 
-  return (
-    <RequireAuth redirectTo="/owner/login">
-      <main style={{ padding: 24 }}>
-        <h1>Owner Dashboard</h1>
-        <p>Owner dashboard works ✅</p>
+  useEffect(() => {
+    let mounted = true;
 
-        <button
-          style={{ marginTop: 20 }}
-          onClick={async () => {
-            await supabase.auth.signOut();
-            router.replace("/owner/login");
-          }}
-        >
-          Logout
-        </button>
-      </main>
-    </RequireAuth>
-  );
+    (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!mounted) return;
+
+      if (!session) {
+        router.replace(redirectTo);
+        return;
+      }
+
+      setLoading(false);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [router, supabase, redirectTo]);
+
+  if (loading) return null;
+
+  return <>{children}</>;
 }

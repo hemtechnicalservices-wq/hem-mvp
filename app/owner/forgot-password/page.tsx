@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { getSupabase } from "@/lib/supabase/browser";
+import { createClient } from "@/lib/supabase/client";
 
-const supabase = getSupabase();
+const supabase = createClient();
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/browser";
+import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/database.types";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];

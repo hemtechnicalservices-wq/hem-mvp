@@ -1,11 +1,11 @@
- "use client";
+'use client';
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabase/browser";
+import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/database.types";
 
-const supabase = getSupabase();
+const supabase = createClient();
 
 type JobsInsert = Database["public"]["Tables"]["jobs"]["Insert"];
 type JobStatus = NonNullable<
@@ -48,16 +48,16 @@ export default function OwnerCreateJobPage() {
         return;
       }
 
-      const payload: JobsInsert = {
-        service: cleanService,
-        notes: cleanNotes || null,
-        status,
-        created_by: userData.user.id,
-      };
+      const payload = {
+  service: cleanService,
+  notes: cleanNotes || null,
+  status: status as "new" | "in_progress" | "done",
+  created_by: userData.user.id,
+} satisfies JobsInsert;
 
       const { error } = await supabase
   .from("jobs")
-  .insert([payload]);
+  .insert(payload as any);
       if (error) throw error;
 
       setService("");
