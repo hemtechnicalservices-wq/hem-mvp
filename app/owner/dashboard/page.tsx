@@ -49,6 +49,7 @@ export default function OwnerDashboardPage() {
       <hr style={{ margin: "20px 0" }} />
 
       <p>All Jobs...</p>
+      {/* Your jobs list UI can stay as you already have it */}
     </main>
   );
 }

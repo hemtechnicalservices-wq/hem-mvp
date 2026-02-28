@@ -23,15 +23,18 @@ export default function CreateJobPage() {
         body: JSON.stringify({ service, notes }),
       });
 
+      const text = await res.text();
+
       if (!res.ok) {
-        const message = await res.text();
-        throw new Error(message || "Failed to create job");
+        // show the real server error message
+        throw new Error(text || "Failed to create job");
       }
 
+      // success -> go back to dashboard
       router.push("/owner/dashboard");
       router.refresh();
     } catch (err: any) {
-      setError(err.message || "Unknown error");
+      setError(err?.message ?? "Unknown error");
     } finally {
       setLoading(false);
     }
@@ -63,7 +66,6 @@ export default function CreateJobPage() {
             value={service}
             onChange={(e) => setService(e.target.value)}
             placeholder="plumbing, electrical, AC..."
-            required
             style={{
               width: "100%",
               padding: 10,
@@ -71,6 +73,7 @@ export default function CreateJobPage() {
               borderRadius: 8,
               marginTop: 6,
             }}
+            required
           />
         </label>
 
@@ -98,7 +101,7 @@ export default function CreateJobPage() {
               padding: 10,
               border: "1px solid #ffb4b4",
               borderRadius: 8,
-              background: "#ffecec",
+              background: "#ffeeee",
               color: "#a00000",
             }}
           >
