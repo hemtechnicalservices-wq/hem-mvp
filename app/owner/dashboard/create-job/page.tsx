@@ -2,15 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabase/client";
 import type { Database } from "@/lib/database.types";
-
-const supabase = createClient();
 
 type JobsInsert = Database["public"]["Tables"]["jobs"]["Insert"];
 type JobStatus = NonNullable<
   Database["public"]["Tables"]["jobs"]["Row"]["status"]
 >;
+
+function toErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
 
 export default function OwnerCreateJobPage() {
   const router = useRouter();
@@ -49,23 +51,23 @@ export default function OwnerCreateJobPage() {
       }
 
       const payload = {
-  service: cleanService,
-  notes: cleanNotes || null,
-  status: status as "new" | "in_progress" | "done",
-  created_by: userData.user.id,
-} satisfies JobsInsert;
+        service: cleanService,
+        notes: cleanNotes || null,
+        status,
+        created_by: userData.user.id,
+      } satisfies JobsInsert;
 
       const { error } = await supabase
-  .from("jobs")
-  .insert(payload as any);
+        .from("jobs")
+        .insert(payload);
       if (error) throw error;
 
       setService("");
       setNotes("");
       setStatus("new");
       setMsg("✅ Job created.");
-    } catch (err: any) {
-      setMsg(err?.message ?? "Failed to create job.");
+    } catch (error: unknown) {
+      setMsg(toErrorMessage(error, "Failed to create job."));
     } finally {
       setLoading(false);
     }
@@ -75,7 +77,7 @@ export default function OwnerCreateJobPage() {
     <main style={{ padding: 20, maxWidth: 640 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
         <h2 style={{ margin: 0 }}>Create Job</h2>
-        <button onClick={() => router.push("/owner/dashboard/jobs")}>
+        <button onClick={() => router.push("/owner/dashboard")}>
           Jobs
         </button>
       </div>

@@ -1,104 +1,126 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import { redirect } from "next/navigation";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/database.types";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-type TechnicianRow = Database["public"]["Tables"]["technicians"]["Row"];
+type JobRow = {
+  id: string;
+  service: string | null;
+  notes: string | null;
+  status: string | null;
+  created_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  assigned_to: string | null;
+};
 
-type JobRow = Pick<
-  Database["public"]["Tables"]["jobs"]["Row"],
-  "id" | "service" | "status" | "notes" | "created_at" | "assigned_to"
->;
+function normalizeJobStatus(s: string | null) {
+  const v = (s || "").toLowerCase().trim();
+  if (!v) return "new";
+  if (v === "in progress") return "in_progress";
+  return v;
+}
 
-export default function TechnicianDashboardPage() {
-  const router = useRouter();
+const fmt = (dt: string | null) => {
+  if (!dt) return "-";
+  try {
+    return new Date(dt).toLocaleString();
+  } catch {
+    return dt;
+  }
+};
 
-  const [loading, setLoading] = useState(true);
-  const [tech, setTech] = useState<TechnicianRow | null>(null);
-  const [jobs, setJobs] = useState<JobRow[]>([]);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+export default async function TechnicianDashboardPage() {
+  const supabase = await createSupabaseServerClient();
 
-  useEffect(() => {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/technician/login");
+
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("id, service, notes, status, created_at, started_at, completed_at, assigned_to")
+    .or(`assigned_to.eq.${user.id},assigned_to.is.null`)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return (
+      <main style={{ padding: 24 }}>
+        <h1>Technician Dashboard</h1>
+        <p style={{ color: "crimson" }}>{error.message}</p>
+      </main>
     );
+  }
 
-    const run = async () => {
-      setLoading(true);
-      setErrorMsg(null);
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.replace("/technician/login");
-        setLoading(false);
-        return;
-      }
-
-      const { data: techRow, error } = await supabase
-        .from("technicians")
-        .select("id, full_name, role, is_active, user_id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (error || !techRow) {
-        setErrorMsg("No technician profile found for this account.");
-        setLoading(false);
-        return;
-      }
-
-      if (!techRow.is_active) {
-        setErrorMsg("Your technician profile is not active.");
-        setLoading(false);
-        return;
-      }
-
-      setTech(techRow);
-      setLoading(false);
-    };
-
-    run();
-  }, []);
+  const cards = ((data || []) as JobRow[]).map((j) => {
+    const st = normalizeJobStatus(j.status);
+    const isMine = j.assigned_to === user.id;
+    const isOpen = j.assigned_to === null;
+    return { ...j, st, isMine, isOpen };
+  });
 
   return (
-    <main style={{ maxWidth: 900, margin: "40px auto", padding: 24 }}>
-      <h1 style={{ marginTop: 0 }}>Technician Dashboard</h1>
+    <main style={{ padding: 24 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <h1 style={{ margin: 0 }}>Technician Dashboard</h1>
 
-      {loading && <p>Loading...</p>}
-      {errorMsg && <p style={{ color: "crimson" }}>{errorMsg}</p>}
+        {/* refresh works automatically with server components */}
+        <a href="/technician/dashboard">Refresh Jobs</a>
 
-      {tech && (
-        <div style={{ marginBottom: 16 }}>
-          <strong>{tech.full_name ?? "Technician"}</strong>
-          {tech.role ? ` (${tech.role})` : ""}
-        </div>
-      )}
+        {/* signout as a simple link to a route handler (we do next) */}
+        <a href="/auth/signout">Sign out</a>
+      </div>
 
-      <div style={{ display: "grid", gap: 12 }}>
-        {jobs.map((j) => (
-          <Link
-            key={j.id}
-            href={`/technician/dashboard/job/${j.id}`}
-            style={{
-              border: "1px solid #ddd",
-              padding: 12,
-              borderRadius: 10,
-              display: "block",
-              textDecoration: "none",
-              color: "inherit",
-            }}
-          >
-            <div style={{ fontWeight: 700 }}>{j.service ?? "Service"}</div>
-            <div>Status: {j.status ?? "-"}</div>
-            <div style={{ opacity: 0.7 }}>{j.notes ?? ""}</div>
-          </Link>
-        ))}
+      <div style={{ marginTop: 16 }}>
+        <p>Your Assigned Jobs + Open Jobs</p>
+
+        {cards.length === 0 ? (
+          <p>No jobs.</p>
+        ) : (
+          <div style={{ display: "grid", gap: 12, maxWidth: 900 }}>
+            {cards.map((j) => (
+              <div
+                key={j.id}
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: 10,
+                  padding: 14,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <div>
+                    <div>
+                      <strong>Service:</strong> {j.service || "-"}
+                    </div>
+                    <div>
+                      <strong>Status:</strong> {j.st}
+                    </div>
+                    <div>
+                      <strong>Assigned:</strong>{" "}
+                      {j.isMine ? "✅ Mine" : j.isOpen ? "🟦 Open" : "Other"}
+                    </div>
+                    <div style={{ marginTop: 6, opacity: 0.8 }}>
+                      <div>Created: {fmt(j.created_at)}</div>
+                      <div>Started: {fmt(j.started_at)}</div>
+                      <div>Completed: {fmt(j.completed_at)}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <Link href={`/technician/dashboard/job/${j.id}`}>View Details →</Link>
+                  </div>
+                </div>
+
+                {j.notes && (
+                  <div style={{ marginTop: 10 }}>
+                    <strong>Notes:</strong> {j.notes}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );

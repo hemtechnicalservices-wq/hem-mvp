@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-
-const supabase = createClient();
+import { supabase } from "@/lib/supabase/client";
 
 export default function ResetPassword() {
   const router = useRouter();
@@ -21,7 +19,7 @@ export default function ResetPassword() {
         setMsg("Open the reset link from your email again.");
       }
     })();
-  }, []);
+  }, []); 
 
   const updatePassword = async (e: React.FormEvent) => {
     e.preventDefault();

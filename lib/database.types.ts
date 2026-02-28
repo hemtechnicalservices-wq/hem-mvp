@@ -1,4 +1,3 @@
-// lib/database.types.ts
 export type Json =
   | string
   | number
@@ -7,89 +6,47 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       jobs: {
         Row: {
           id: string;
-          created_at: string | null;
-
-          status: "new" | "scheduled" | "in_progress" | "done" | null;
           service: string | null;
           notes: string | null;
+          status: string | null;
 
-          assigned_to: string | null;
-          customer_id: string | null;
-          created_by: string | null;
-          technician_id: string | null;
-
+          created_at: string | null;
           started_at: string | null;
           completed_at: string | null;
 
-          completed_notes: string | null;
+          assigned_to: string | null;
+          technician_id: string | null;
+          created_by: string | null;
+
+          customer_id: string | null;
+          owner_user_id: string | null;
+
+          image_url: string | null;
+          completion_notes: string | null;
           completion_photos: string[] | null;
+
+          price: number | null;
         };
-        Insert: {
-          id?: string;
-          created_at?: string | null;
-
-          status?: "new" | "scheduled" | "in_progress" | "done" | null;
-          service?: string | null;
-          notes?: string | null;
-
-          assigned_to?: string | null;
-          customer_id?: string | null;
-          created_by?: string | null;
-          technician_id?: string | null;
-
-          started_at?: string | null;
-          completed_at?: string | null;
-
-          completed_notes?: string | null;
-          completion_photos?: string[] | null;
-        };
-        Update: {
-          id?: string;
-          created_at?: string | null;
-
-          status?: "new" | "scheduled" | "in_progress" | "done" | null;
-          service?: string | null;
-          notes?: string | null;
-
-          assigned_to?: string | null;
-          customer_id?: string | null;
-          created_by?: string | null;
-          technician_id?: string | null;
-
-          started_at?: string | null;
-          completed_at?: string | null;
-
-          completed_notes?: string | null;
-          completion_photos?: string[] | null;
-        };
-        Relationships: [];
-      };
-
-      // Keep minimal placeholders so TS is happy if you reference these later.
-      profiles: {
-        Row: { id: string };
-        Insert: { id: string };
-        Update: { id?: string };
-        Relationships: [];
+        Insert: Partial<Database['public']['Tables']['jobs']['Row']>;
+        Update: Partial<Database['public']['Tables']['jobs']['Row']>;
       };
 
       technicians: {
         Row: {
-          is_active: boolean;
-          role: any;
-          full_name: string;
           id: string;
-          user_id: string | null;
-};
-        Insert: { id: string; user_id?: string | null };
-        Update: { id?: string; user_id?: string | null };
-        Relationships: [];
+          full_name: string | null;
+          is_active: boolean | null;
+          role: string | null;
+          created_at: string | null;
+        };
+        Insert: Partial<Database['public']['Tables']['technicians']['Row']>;
+        Update: Partial<Database['public']['Tables']['technicians']['Row']>;
       };
     };
     Views: {};
@@ -97,4 +54,4 @@ export interface Database {
     Enums: {};
     CompositeTypes: {};
   };
-}
+};

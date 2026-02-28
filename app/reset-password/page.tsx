@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabase/client";
+
+function toErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
 
 function parseHashParams(hash: string) {
   // hash example: "#access_token=...&refresh_token=...&type=recovery"
@@ -19,7 +23,6 @@ function parseHashParams(hash: string) {
 }
 
 export default function ResetPasswordPage() {
-  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
   const [ready, setReady] = useState(false);
@@ -100,9 +103,9 @@ export default function ResetPasswordPage() {
             "Reset link is missing or expired. Please request a new password reset email."
           );
         }
-      } catch (e: any) {
+      } catch (error: unknown) {
         if (!cancelled) {
-          setLinkError(e?.message || "Failed to validate reset link.");
+          setLinkError(toErrorMessage(error, "Failed to validate reset link."));
         }
       }
     };
@@ -140,8 +143,8 @@ export default function ResetPasswordPage() {
 
       setMessage("Password updated successfully. Redirecting to login...");
       setTimeout(() => router.replace("/owner/login"), 1200);
-    } catch (e: any) {
-      setMessage(e?.message || "Failed to update password.");
+    } catch (error: unknown) {
+      setMessage(toErrorMessage(error, "Failed to update password."));
     } finally {
       setLoading(false);
     }
