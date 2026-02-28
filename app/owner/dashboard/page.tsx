@@ -1,88 +1,54 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
-import { normalizeJobStatus } from "@/lib/jobs/status";
 
-const fmtDateTime = (date: string | null): string => {
-  if (!date) return "–";
-  return new Date(date).toLocaleString();
-};
-
-type JobRow = {
-  id: string;
-  service: string | null;
-  notes: string | null;
-  status: string | null;
-  created_at: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  assigned_to: string | null;
-};
-
-export default function OwnerDashboard() {
-  const router = useRouter();
-  const [jobs, setJobs] = useState<JobRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-
-  useEffect(() => {
-    const run = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data?.session?.user) {
-        router.replace("/owner/login");
-        return;
-      }
-
-      const { data: jobsData, error } = await supabase
-        .from("jobs")
-        .select("id, service, notes, status, created_at, started_at, completed_at, assigned_to")
-        .order("created_at", { ascending: false });
-
-      if (error) setErr(error.message);
-      setJobs((jobsData ?? []) as JobRow[]);
-      setLoading(false);
-    };
-    run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    router.replace("/owner/login");
-  };
-
-  if (loading) return <main style={{ padding: 24 }}>Loading…</main>;
-
+export default function OwnerDashboardPage() {
   return (
-    <main style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
+    <main style={{ padding: 24 }}>
       <h1>Owner Dashboard</h1>
-      <div style={{ display: "flex", gap: 10 }}>
-        <Link href="/owner/jobs/new">Create job</Link>
-        <button onClick={signOut}>Sign out</button>
+
+      <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+        <Link
+          href="/owner/dashboard/create-job"
+          style={{
+            padding: "10px 14px",
+            border: "1px solid #ccc",
+            borderRadius: 8,
+            textDecoration: "none",
+            display: "inline-block",
+          }}
+        >
+          Create Job
+        </Link>
+
+        <Link
+          href="/owner/dashboard"
+          style={{
+            padding: "10px 14px",
+            border: "1px solid #ccc",
+            borderRadius: 8,
+            textDecoration: "none",
+            display: "inline-block",
+          }}
+        >
+          Refresh Jobs
+        </Link>
+
+        <Link
+          href="/owner/login"
+          style={{
+            padding: "10px 14px",
+            border: "1px solid #ccc",
+            borderRadius: 8,
+            textDecoration: "none",
+            display: "inline-block",
+          }}
+        >
+          Sign Out
+        </Link>
       </div>
 
-      {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
+      <hr style={{ margin: "20px 0" }} />
 
-      <h2 style={{ marginTop: 20 }}>All Jobs</h2>
-
-      <div style={{ display: "grid", gap: 12 }}>
-        {jobs.map((j) => (
-          <div key={j.id} style={{ border: "1px solid #ddd", borderRadius: 14, padding: 14 }}>
-            <div><b>ID:</b> {j.id}</div>
-            <div><b>Service:</b> {j.service ?? "–"}</div>
-            <div><b>Status:</b> {normalizeJobStatus(j.status)}</div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>
-              Created: {fmtDateTime(j.created_at)} | Started: {fmtDateTime(j.started_at)} | Done: {fmtDateTime(j.completed_at)}
-            </div>
-            <div style={{ marginTop: 8 }}>
-              <Link href={`/dispatcher/assign/${j.id}`}>Assign via Dispatcher →</Link>
-            </div>
-          </div>
-        ))}
-      </div>
+      <p>All Jobs...</p>
     </main>
   );
 }

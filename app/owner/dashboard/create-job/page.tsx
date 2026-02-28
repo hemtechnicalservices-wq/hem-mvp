@@ -1,128 +1,124 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
-import type { Database } from "@/lib/database.types";
 
-type JobsInsert = Database["public"]["Tables"]["jobs"]["Insert"];
-type JobStatus = NonNullable<
-  Database["public"]["Tables"]["jobs"]["Row"]["status"]
->;
-
-function toErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}
-
-export default function OwnerCreateJobPage() {
+export default function CreateJobPage() {
   const router = useRouter();
 
   const [service, setService] = useState("");
   const [notes, setNotes] = useState("");
-  const [status, setStatus] = useState<JobStatus>("new");
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!data?.user) router.push("/owner/login");
-    })();
-  }, [router]);
-
-  const onCreate = async (e: React.FormEvent) => {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setMsg(null);
-
-    const cleanService = service.trim();
-    const cleanNotes = notes.trim();
-
-    if (!cleanService) {
-      setMsg("Service is required.");
-      return;
-    }
-
+    setError(null);
     setLoading(true);
+
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) {
-        router.push("/owner/login");
-        return;
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service, notes }),
+      });
+
+      if (!res.ok) {
+        const message = await res.text();
+        throw new Error(message || "Failed to create job");
       }
 
-      const payload = {
-        service: cleanService,
-        notes: cleanNotes || null,
-        status,
-        created_by: userData.user.id,
-      } satisfies JobsInsert;
-
-      const { error } = await supabase
-        .from("jobs")
-        .insert(payload);
-      if (error) throw error;
-
-      setService("");
-      setNotes("");
-      setStatus("new");
-      setMsg("✅ Job created.");
-    } catch (error: unknown) {
-      setMsg(toErrorMessage(error, "Failed to create job."));
+      router.push("/owner/dashboard");
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || "Unknown error");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <main style={{ padding: 20, maxWidth: 640 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-        <h2 style={{ margin: 0 }}>Create Job</h2>
-        <button onClick={() => router.push("/owner/dashboard")}>
-          Jobs
-        </button>
-      </div>
+    <main style={{ padding: 24, maxWidth: 520 }}>
+      <h1>Create Job</h1>
 
-      <form onSubmit={onCreate} style={{ marginTop: 16, display: "grid", gap: 12 }}>
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Service</span>
+      <button
+        type="button"
+        onClick={() => router.push("/owner/dashboard")}
+        style={{
+          marginTop: 8,
+          padding: "8px 12px",
+          border: "1px solid #ccc",
+          borderRadius: 8,
+          background: "transparent",
+          cursor: "pointer",
+        }}
+      >
+        ← Back
+      </button>
+
+      <form onSubmit={onSubmit} style={{ marginTop: 16 }}>
+        <label style={{ display: "block", marginBottom: 8 }}>
+          Service
           <input
             value={service}
             onChange={(e) => setService(e.target.value)}
-            placeholder="e.g. AC maintenance"
-            style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
+            placeholder="plumbing, electrical, AC..."
+            required
+            style={{
+              width: "100%",
+              padding: 10,
+              border: "1px solid #ccc",
+              borderRadius: 8,
+              marginTop: 6,
+            }}
           />
         </label>
 
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Notes</span>
+        <label style={{ display: "block", marginBottom: 8 }}>
+          Notes
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Optional notes"
-            rows={4}
-            style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
+            placeholder="Customer issue / location / details..."
+            style={{
+              width: "100%",
+              padding: 10,
+              border: "1px solid #ccc",
+              borderRadius: 8,
+              marginTop: 6,
+              minHeight: 110,
+            }}
           />
         </label>
 
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Status</span>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as JobStatus)}
-            style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8 }}
+        {error && (
+          <div
+            style={{
+              marginTop: 10,
+              padding: 10,
+              border: "1px solid #ffb4b4",
+              borderRadius: 8,
+              background: "#ffecec",
+              color: "#a00000",
+            }}
           >
-            <option value="new">new</option>
-            <option value="scheduled">scheduled</option>
-            <option value="in_progress">in_progress</option>
-            <option value="done">done</option>
-          </select>
-        </label>
+            {error}
+          </div>
+        )}
 
-        <button disabled={loading} style={{ padding: 12, borderRadius: 10 }}>
-          {loading ? "Creating…" : "Create"}
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            marginTop: 12,
+            padding: "10px 14px",
+            border: "1px solid #ccc",
+            borderRadius: 8,
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
+          {loading ? "Creating..." : "Create Job"}
         </button>
-
-        {msg && <p style={{ margin: 0 }}>{msg}</p>}
       </form>
     </main>
   );
