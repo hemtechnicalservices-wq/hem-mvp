@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabase/client";
 import type { Database } from "@/lib/database.types";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type TechnicianRow = Database["public"]["Tables"]["technicians"]["Row"];
-
-const supabase = createClient();
+type TechnicianOption = Pick<
+  TechnicianRow,
+  "id" | "full_name" | "role" | "is_active"
+>;
 
 export default function JobDetailsPage() {
   const params = useParams<{ id: string }>();
@@ -16,7 +18,7 @@ export default function JobDetailsPage() {
   const jobId = params.id;
 
   const [job, setJob] = useState<JobRow | null>(null);
-  const [techs, setTechs] = useState<TechnicianRow[]>([]);
+  const [techs, setTechs] = useState<TechnicianOption[]>([]);
   const [selectedTechId, setSelectedTechId] = useState<string>("");
 
   const [loading, setLoading] = useState(true);

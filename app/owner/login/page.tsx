@@ -1,10 +1,10 @@
-import { Suspense } from "react";
-import LoginClient from "./LoginClient";
+import LoginForm from "@/app/components/LoginForm";
 
-export default function Page() {
+export default function OwnerLoginPage() {
   return (
-    <Suspense fallback={null}>
-      <LoginClient />
-    </Suspense>
+    <main style={{ padding: 24 }}>
+      <h1>Owner Login</h1>
+      <LoginForm redirectTo="/owner/dashboard" />
+    </main>
   );
 }

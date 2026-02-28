@@ -1,60 +1,63 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
-  const supabase = createClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") || "/portal";
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("tech@hem.com");
+  const [password, setPassword] = useState("123456");
+  const [error, setError] = useState("");
 
-  async function handleLogin(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    setError("");
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
     });
 
-    setLoading(false);
-
-    if (error) {
-      alert(error.message);
+    if (!res.ok) {
+      setError("Login failed");
       return;
     }
 
-    router.push("/owner/dashboard");
+    router.replace(next);
+    router.refresh();
   }
 
   return (
-    <form onSubmit={handleLogin} style={{ padding: 40 }}>
-      <h2>Login</h2>
+    <main className="min-h-screen flex items-center justify-center p-6">
+      <form onSubmit={onSubmit} className="w-full max-w-md space-y-4 border rounded-xl p-6">
+        <h1 className="text-2xl font-semibold">Technician Login</h1>
 
-      <input
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email"
-      />
+        <input
+          className="w-full border rounded px-3 py-2"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+        />
 
-      <br /><br />
+        <input
+          className="w-full border rounded px-3 py-2"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+        />
 
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Password"
-      />
+        {error ? <p className="text-red-500 text-sm">{error}</p> : null}
 
-      <br /><br />
-
-      <button type="submit" disabled={loading}>
-        {loading ? "Logging in..." : "Login"}
-      </button>
-    </form>
+        <button className="w-full rounded bg-black text-white py-2" type="submit">
+          Sign in
+        </button>
+      </form>
+    </main>
   );
 }

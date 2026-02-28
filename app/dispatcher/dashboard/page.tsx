@@ -6,39 +6,31 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { normalizeJobStatus } from "@/lib/jobs/status";
 
-const fmtDateTime = (date: string | null): string => {
-  if (!date) return "–";
-  return new Date(date).toLocaleString();
-};
-
 type JobRow = {
   id: string;
   service: string | null;
-  notes: string | null;
   status: string | null;
-  created_at: string | null;
-  started_at: string | null;
-  completed_at: string | null;
   assigned_to: string | null;
+  created_at: string | null;
 };
 
-export default function OwnerDashboard() {
+export default function DispatcherDashboard() {
   const router = useRouter();
   const [jobs, setJobs] = useState<JobRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const run = async () => {
       const { data } = await supabase.auth.getSession();
       if (!data?.session?.user) {
-        router.replace("/owner/login");
+        router.replace("/dispatcher/login");
         return;
       }
 
       const { data: jobsData, error } = await supabase
         .from("jobs")
-        .select("id, service, notes, status, created_at, started_at, completed_at, assigned_to")
+        .select("id, service, status, assigned_to, created_at")
         .order("created_at", { ascending: false });
 
       if (error) setErr(error.message);
@@ -51,34 +43,26 @@ export default function OwnerDashboard() {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    router.replace("/owner/login");
+    router.replace("/dispatcher/login");
   };
 
   if (loading) return <main style={{ padding: 24 }}>Loading…</main>;
 
   return (
     <main style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-      <h1>Owner Dashboard</h1>
-      <div style={{ display: "flex", gap: 10 }}>
-        <Link href="/owner/jobs/new">Create job</Link>
-        <button onClick={signOut}>Sign out</button>
-      </div>
+      <h1>Dispatcher Dashboard</h1>
+      <button onClick={signOut}>Sign out</button>
 
       {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
 
-      <h2 style={{ marginTop: 20 }}>All Jobs</h2>
-
-      <div style={{ display: "grid", gap: 12 }}>
+      <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
         {jobs.map((j) => (
           <div key={j.id} style={{ border: "1px solid #ddd", borderRadius: 14, padding: 14 }}>
             <div><b>ID:</b> {j.id}</div>
             <div><b>Service:</b> {j.service ?? "–"}</div>
             <div><b>Status:</b> {normalizeJobStatus(j.status)}</div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>
-              Created: {fmtDateTime(j.created_at)} | Started: {fmtDateTime(j.started_at)} | Done: {fmtDateTime(j.completed_at)}
-            </div>
             <div style={{ marginTop: 8 }}>
-              <Link href={`/dispatcher/assign/${j.id}`}>Assign via Dispatcher →</Link>
+              <Link href={`/dispatcher/assign/${j.id}`}>Assign / Change technician →</Link>
             </div>
           </div>
         ))}
