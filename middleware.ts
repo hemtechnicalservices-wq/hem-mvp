@@ -1,6 +1,39 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import type { CookieOptions } from "@supabase/ssr";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
+  // Important: include request in NextResponse.next
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet: Array<{ name: string; value: string; options?: CookieOptions }>) {
+          // Keep request cookies in sync for this middleware run
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+
+          // Recreate response with updated request
+          response = NextResponse.next({ request });
+
+          // Persist cookies to browser
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const { pathname } = request.nextUrl;
 
   const isProtected =
@@ -13,45 +46,25 @@ export function middleware(request: NextRequest) {
     pathname === "/owner/login" ||
     pathname === "/dispatcher/login";
 
-  const hasAuthCookie = request.cookies
-    .getAll()
-    .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
-
-  // Not logged in → redirect to login
-  if (!hasAuthCookie && isProtected) {
+  if (!user && isProtected) {
     const url = request.nextUrl.clone();
-
-    if (pathname.startsWith("/technician"))
-      url.pathname = "/technician/login";
-    if (pathname.startsWith("/owner"))
-      url.pathname = "/owner/login";
-    if (pathname.startsWith("/dispatcher"))
-      url.pathname = "/dispatcher/login";
-
+    if (pathname.startsWith("/technician")) url.pathname = "/technician/login";
+    else if (pathname.startsWith("/owner")) url.pathname = "/owner/login";
+    else if (pathname.startsWith("/dispatcher")) url.pathname = "/dispatcher/login";
     return NextResponse.redirect(url);
   }
 
-  // Already logged in → prevent going back to login page
-  if (hasAuthCookie && isLogin) {
+  if (user && isLogin) {
     const url = request.nextUrl.clone();
-
-    if (pathname.startsWith("/technician"))
-      url.pathname = "/technician/dashboard";
-    if (pathname.startsWith("/owner"))
-      url.pathname = "/owner/dashboard";
-    if (pathname.startsWith("/dispatcher"))
-      url.pathname = "/dispatcher/dashboard";
-
+    if (pathname.startsWith("/technician")) url.pathname = "/technician/dashboard";
+    else if (pathname.startsWith("/owner")) url.pathname = "/owner/dashboard";
+    else if (pathname.startsWith("/dispatcher")) url.pathname = "/dispatcher/dashboard";
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
-  matcher: [
-    "/technician/:path*",
-    "/owner/:path*",
-    "/dispatcher/:path*",
-  ],
+  matcher: ["/technician/:path*", "/owner/:path*", "/dispatcher/:path*"],
 };
