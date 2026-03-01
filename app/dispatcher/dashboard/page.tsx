@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -17,26 +17,35 @@ type JobRow = {
 export default function DispatcherDashboard() {
   const router = useRouter();
   const [jobs, setJobs] = useState<JobRow[]>([]);
-  const [err, setErr] = useState("");
+  const [err, setErr] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const run = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data?.session?.user) {
+      setLoading(true);
+      setErr("");
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session?.user) {
         router.replace("/dispatcher/login");
         return;
       }
 
-      const { data: jobsData, error } = await supabase
+      const { data, error } = await supabase
         .from("jobs")
         .select("id, service, status, assigned_to, created_at")
         .order("created_at", { ascending: false });
 
-      if (error) setErr(error.message);
-      setJobs((jobsData ?? []) as JobRow[]);
+      if (error) {
+        setErr(error.message);
+        setJobs([]);
+      } else {
+        setJobs((data ?? []) as JobRow[]);
+      }
+
       setLoading(false);
     };
+
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -57,12 +66,24 @@ export default function DispatcherDashboard() {
 
       <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
         {jobs.map((j) => (
-          <div key={j.id} style={{ border: "1px solid #ddd", borderRadius: 14, padding: 14 }}>
-            <div><b>ID:</b> {j.id}</div>
-            <div><b>Service:</b> {j.service ?? "–"}</div>
-            <div><b>Status:</b> {normalizeJobStatus(j.status)}</div>
+          <div
+            key={j.id}
+            style={{ border: "1px solid #ddd", borderRadius: 14, padding: 14 }}
+          >
+            <div>
+              <b>ID:</b> {j.id}
+            </div>
+            <div>
+              <b>Service:</b> {j.service ?? "-"}
+            </div>
+            <div>
+              <b>Status:</b> {normalizeJobStatus(j.status)}
+            </div>
+
             <div style={{ marginTop: 8 }}>
-              <Link href={`/dispatcher/assign/${j.id}`}>Assign / Change technician →</Link>
+              <Link href={`/dispatcher/assign/${j.id}`}>
+                Assign / Change technician →
+              </Link>
             </div>
           </div>
         ))}
