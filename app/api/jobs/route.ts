@@ -1,23 +1,21 @@
-// app/api/jobs/route.ts
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 
-function createSupabaseServerClient() {
-  const cookieStore = cookies();
+async function createSupabaseRouteClient() {
+  const cookieStore = await cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        async getAll() {
-          return (await cookieStore).getAll();
+        getAll() {
+          return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(async ({ name, value, options }) => {
-            (await cookieStore).set(name, value, options);
-          });
+        setAll() {
+          // Route handlers can't mutate request cookies.
+          // Session refresh should be handled in middleware.
         },
       },
     }
@@ -26,16 +24,17 @@ function createSupabaseServerClient() {
 
 export async function POST(req: Request) {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseRouteClient();
 
     const {
       data: { user },
-      error: userErr,
+      error: userError,
     } = await supabase.auth.getUser();
 
-    if (userErr) {
-      return NextResponse.json({ ok: false, error: userErr.message }, { status: 401 });
+    if (userError) {
+      return NextResponse.json({ ok: false, error: userError.message }, { status: 401 });
     }
+
     if (!user) {
       return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
     }
@@ -54,7 +53,7 @@ export async function POST(req: Request) {
         service,
         notes,
         status: "new",
-        created_by: user.id, // ✅ THIS is the line that must not be null
+        created_by: user.id,
       })
       .select()
       .single();
@@ -64,21 +63,24 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true, job: data });
-  } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, error: err?.message ?? "Server error" },
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Server error";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
 
 export async function GET() {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseRouteClient();
 
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser();
+
+    if (userError) {
+      return NextResponse.json({ ok: false, error: userError.message }, { status: 401 });
+    }
 
     if (!user) {
       return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
@@ -95,10 +97,8 @@ export async function GET() {
     }
 
     return NextResponse.json({ ok: true, jobs: data });
-  } catch (err: any) {
-    return NextResponse.json(
-      { ok: false, error: err?.message ?? "Server error" },
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Server error";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

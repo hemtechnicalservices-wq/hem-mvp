@@ -1,26 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
-export default function RequireAuth({ children }: { children: React.ReactNode }) {
+export default function RequireAuth({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+  const supabase = useMemo(() => createClient(), []);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
     const run = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      console.log("AUTH USER:", data.user);
-      console.log("AUTH ERROR:", error);
-
+      const { data } = await supabase.auth.getUser();
       if (!mounted) return;
 
       if (!data.user) {
+        setReady(false);
         const next = encodeURIComponent(pathname || "/");
         const loginPath = pathname?.startsWith("/technician")
           ? `/technician/login?next=${next}`
@@ -38,7 +36,6 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
     run();
 
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      // re-check after sign-in/out
       run();
     });
 
