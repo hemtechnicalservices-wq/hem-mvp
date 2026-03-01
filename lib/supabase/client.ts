@@ -1,3 +1,4 @@
+// lib/supabase/client.ts
 import { createBrowserClient } from "@supabase/ssr";
 
 export function createClient() {
@@ -6,8 +7,3 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 }
-
-export const supabase = createClient();
-
-// If your file already exports `createClient`, add this alias:
-export const createSupabaseBrowserClient = createClient;

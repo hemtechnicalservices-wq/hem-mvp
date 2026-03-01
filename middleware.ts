@@ -1,10 +1,13 @@
+// middleware.ts
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import type { CookieOptions } from "@supabase/ssr";
 
 export async function middleware(request: NextRequest) {
-  // Important: include request in NextResponse.next
-  let response = NextResponse.next({ request });
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,14 +17,19 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet: Array<{ name: string; value: string; options?: CookieOptions }>) {
-          // Keep request cookies in sync for this middleware run
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        setAll(cookiesToSet) {
+          // 1) update request cookies (so Supabase can read them in this same middleware run)
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
+          });
 
-          // Recreate response with updated request
-          response = NextResponse.next({ request });
+          // 2) IMPORTANT: recreate response FIRST, then set cookies on THAT response
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
 
-          // Persist cookies to browser
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
           });
@@ -30,11 +38,15 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // Touch the session (this is what triggers refresh when needed)
+  await supabase.auth.getUser();
+
+  // --- your redirect logic (keep it if you want) ---
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
+  const pathname = request.nextUrl.pathname;
 
   const isProtected =
     pathname.startsWith("/technician/dashboard") ||

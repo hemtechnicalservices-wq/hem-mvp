@@ -1,82 +1,104 @@
+// app/api/jobs/route.ts
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
-function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+function createSupabaseServerClient() {
+  const cookieStore = cookies();
 
-  // IMPORTANT: do NOT throw at module top-level (can break Vercel build)
-  if (!url || !serviceKey) return null;
-
-  return createClient(url, serviceKey, {
-    auth: { persistSession: false },
-  });
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        async getAll() {
+          return (await cookieStore).getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(async ({ name, value, options }) => {
+            (await cookieStore).set(name, value, options);
+          });
+        },
+      },
+    }
+  );
 }
 
 export async function POST(req: Request) {
   try {
-    const supabase = getSupabaseAdmin();
-    if (!supabase) {
-      return new NextResponse(
-        "Server misconfigured: Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
-        { status: 500 }
-      );
+    const supabase = createSupabaseServerClient();
+
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+
+    if (userErr) {
+      return NextResponse.json({ ok: false, error: userErr.message }, { status: 401 });
+    }
+    if (!user) {
+      return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
     }
 
-    const body = await req.json().catch(() => null);
-    const service = String(body?.service ?? "").trim();
-    const notes = String(body?.notes ?? "").trim();
+    const body = await req.json();
+    const service = (body.service ?? "").trim();
+    const notes = (body.notes ?? "").trim();
 
     if (!service) {
-      return new NextResponse("Service is required", { status: 400 });
+      return NextResponse.json({ ok: false, error: "Service is required" }, { status: 400 });
     }
 
-    // Adjust table/columns only if your schema differs
     const { data, error } = await supabase
       .from("jobs")
-      .insert([{ service, notes, status: "new" }])
+      .insert({
+        service,
+        notes,
+        status: "new",
+        created_by: user.id, // ✅ THIS is the line that must not be null
+      })
       .select()
       .single();
 
     if (error) {
-      return new NextResponse(`Supabase error: ${error.message}`, {
-        status: 500,
-      });
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true, job: data });
-  } catch (e: any) {
-    return new NextResponse(e?.message ?? "Unknown server error", {
-      status: 500,
-    });
+  } catch (err: any) {
+    return NextResponse.json(
+      { ok: false, error: err?.message ?? "Server error" },
+      { status: 500 }
+    );
   }
 }
 
 export async function GET() {
   try {
-    const supabase = getSupabaseAdmin();
-    if (!supabase) {
-      return new NextResponse(
-        "Server misconfigured: Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
-        { status: 500 }
-      );
+    const supabase = createSupabaseServerClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
     }
 
     const { data, error } = await supabase
       .from("jobs")
       .select("*")
+      .eq("created_by", user.id)
       .order("created_at", { ascending: false });
 
     if (error) {
-      return new NextResponse(`Supabase error: ${error.message}`, {
-        status: 500,
-      });
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, jobs: data ?? [] });
-  } catch (e: any) {
-    return new NextResponse(e?.message ?? "Unknown server error", {
-      status: 500,
-    });
+    return NextResponse.json({ ok: true, jobs: data });
+  } catch (err: any) {
+    return NextResponse.json(
+      { ok: false, error: err?.message ?? "Server error" },
+      { status: 500 }
+    );
   }
 }
