@@ -22,16 +22,16 @@ export default function DispatcherDashboard() {
 
   useEffect(() => {
     const run = async () => {
-      setLoading(true);
       setErr("");
+      setLoading(true);
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session?.user) {
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess?.session?.user) {
         router.replace("/dispatcher/login");
         return;
       }
 
-      const { data, error } = await supabase
+      const { data: jobsData, error } = await supabase
         .from("jobs")
         .select("id, service, status, assigned_to, created_at")
         .order("created_at", { ascending: false });
@@ -39,10 +39,11 @@ export default function DispatcherDashboard() {
       if (error) {
         setErr(error.message);
         setJobs([]);
-      } else {
-        setJobs((data ?? []) as JobRow[]);
+        setLoading(false);
+        return;
       }
 
+      setJobs((jobsData ?? []) as JobRow[]);
       setLoading(false);
     };
 
@@ -62,19 +63,25 @@ export default function DispatcherDashboard() {
       <h1>Dispatcher Dashboard</h1>
       <button onClick={signOut}>Sign out</button>
 
-      {err ? <p style={{ color: "crimson" }}>{err}</p> : null}
+      {err ? (
+        <p style={{ marginTop: 12, color: "crimson" }}>{err}</p>
+      ) : null}
 
       <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
         {jobs.map((j) => (
           <div
             key={j.id}
-            style={{ border: "1px solid #ddd", borderRadius: 14, padding: 14 }}
+            style={{
+              border: "1px solid #ddd",
+              borderRadius: 14,
+              padding: 14,
+            }}
           >
             <div>
               <b>ID:</b> {j.id}
             </div>
             <div>
-              <b>Service:</b> {j.service ?? "-"}
+              <b>Service:</b> {j.service ?? "—"}
             </div>
             <div>
               <b>Status:</b> {normalizeJobStatus(j.status)}
