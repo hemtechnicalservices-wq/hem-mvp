@@ -1,72 +1,152 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { supabase } from "@/lib/supabase/client"; // change import if your export differs
+
+type JobRow = {
+  id: string;
+  service: string | null;
+  title?: string | null;
+  description?: string | null;
+  notes?: string | null;
+  status: string | null;
+  created_at: string;
+};
 
 export default function OwnerDashboardPage() {
   const router = useRouter();
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const checkSession = async () => {
-    const { data } = await supabase.auth.getSession();
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [jobs, setJobs] = useState<JobRow[]>([]);
 
-    if (!data.session) {
-      router.push("/login");
+  const requireOwnerSession = useCallback(async () => {
+    setErrorMsg(null);
+    setLoadingAuth(true);
+
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      setErrorMsg(error.message);
+      setLoadingAuth(false);
       return null;
     }
 
-    const { data: profile } = await supabase
+    const session = data.session;
+    if (!session) {
+      // Not logged in
+      router.replace("/owner/login");
+      router.refresh();
+      setLoadingAuth(false);
+      return null;
+    }
+
+    // Role check in public.profiles
+    const userId = session.user.id;
+
+    const { data: profile, error: profileErr } = await supabase
       .from("profiles")
       .select("role")
-      .eq("id", data.session.user.id)
+      .eq("id", userId)
       .single();
 
-    if (!profile || profile.role !== "owner") {
-      router.push("/login");
+    if (profileErr) {
+      setErrorMsg("Logged in, but profile check failed.");
+      setLoadingAuth(false);
       return null;
     }
 
-    return data.session;
-  };
+    if (profile?.role !== "owner") {
+      await supabase.auth.signOut();
+      router.replace("/owner/login");
+      router.refresh();
+      setLoadingAuth(false);
+      return null;
+    }
 
-  const fetchJobs = useCallback(async () => {
-    const session = await checkSession();
-    if (!session) return;
+    setLoadingAuth(false);
+    return session;
+  }, [router]);
 
-    const { data, error } = await supabase
-      .from("jobs")
-      .select("*")
-      .order("created_at", { ascending: false });
+  const loadJobs = useCallback(async () => {
+    setErrorMsg(null);
+    setLoadingJobs(true);
 
-    if (!error && data) {
-      setJobs(data);
+    try {
+      const { data, error } = await supabase
+        .from("jobs")
+        .select("id, service, title, description, notes, status, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) {
+        setErrorMsg(error.message);
+        setJobs([]);
+        return;
+      }
+
+      setJobs((data ?? []) as JobRow[]);
+    } catch (err: any) {
+      setErrorMsg(err?.message ?? "Failed to load jobs");
+      setJobs([]);
+    } finally {
+      setLoadingJobs(false);
     }
   }, []);
 
+  // On page load: ensure logged in + owner, then load jobs
   useEffect(() => {
     (async () => {
-      await fetchJobs();
-      setLoading(false);
+      const ok = await requireOwnerSession();
+      if (ok) await loadJobs();
     })();
-  }, [fetchJobs]);
+  }, [requireOwnerSession, loadJobs]);
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
+  // Optional: keep UI synced if session changes in another tab
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event) => {
+      if (event === "SIGNED_OUT") {
+        router.replace("/owner/login");
+        router.refresh();
+        return;
+      }
+      if (event === "SIGNED_IN") {
+        await requireOwnerSession();
+        await loadJobs();
+      }
+    });
+
+    return () => sub.subscription.unsubscribe();
+  }, [router, requireOwnerSession, loadJobs]);
+
+  const onRefresh = async () => {
+    const ok = await requireOwnerSession();
+    if (ok) await loadJobs();
   };
 
-  if (loading) {
-    return <main style={{ padding: 24 }}>Loading...</main>;
+  const onSignOut = async () => {
+    setErrorMsg(null);
+    await supabase.auth.signOut();
+    router.replace("/owner/login");
+    router.refresh();
+  };
+
+  if (loadingAuth) {
+    return (
+      <main style={{ padding: 24 }}>
+        <h1>Owner Dashboard</h1>
+        <p>Loading...</p>
+      </main>
+    );
   }
 
   return (
     <main style={{ padding: 24 }}>
       <h1>Owner Dashboard</h1>
 
-      <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+      <div style={{ display: "flex", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
         <Link
           href="/owner/dashboard/create-job"
           style={{
@@ -74,26 +154,28 @@ export default function OwnerDashboardPage() {
             border: "1px solid #ccc",
             borderRadius: 8,
             textDecoration: "none",
+            display: "inline-block",
           }}
         >
           Create Job
         </Link>
 
         <button
-          onClick={fetchJobs}
+          onClick={onRefresh}
+          disabled={loadingJobs}
           style={{
             padding: "10px 14px",
             border: "1px solid #ccc",
             borderRadius: 8,
             background: "white",
-            cursor: "pointer",
+            cursor: loadingJobs ? "not-allowed" : "pointer",
           }}
         >
-          Refresh Jobs
+          {loadingJobs ? "Refreshing..." : "Refresh Jobs"}
         </button>
 
         <button
-          onClick={handleSignOut}
+          onClick={onSignOut}
           style={{
             padding: "10px 14px",
             border: "1px solid #ccc",
@@ -108,22 +190,42 @@ export default function OwnerDashboardPage() {
 
       <hr style={{ margin: "16px 0" }} />
 
+      {errorMsg ? (
+        <div style={{ color: "red", marginBottom: 12 }}>{errorMsg}</div>
+      ) : null}
+
+      <h3 style={{ marginTop: 0 }}>All Jobs</h3>
+
       {jobs.length === 0 ? (
-        <p>No jobs found.</p>
+        <p style={{ opacity: 0.8 }}>{loadingJobs ? "Loading jobs..." : "No jobs found."}</p>
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
           {jobs.map((job) => (
             <div
               key={job.id}
               style={{
-                padding: 12,
-                border: "1px solid #ddd",
+                border: "1px solid #e5e5e5",
                 borderRadius: 10,
+                padding: 12,
               }}
             >
-              <strong>{job.service}</strong>
-              <div>Status: {job.status}</div>
-              <div>{job.notes}</div>
+              <div style={{ fontWeight: 700 }}>
+                {job.service || job.title || "Job"}
+              </div>
+
+              <div style={{ fontSize: 14, opacity: 0.85, marginTop: 4 }}>
+                Status: <b>{job.status ?? "unknown"}</b>
+              </div>
+
+              {(job.description || job.notes) ? (
+                <div style={{ fontSize: 14, marginTop: 6 }}>
+                  {job.description || job.notes}
+                </div>
+              ) : null}
+
+              <div style={{ fontSize: 12, opacity: 0.6, marginTop: 8 }}>
+                Created: {new Date(job.created_at).toLocaleString()}
+              </div>
             </div>
           ))}
         </div>
