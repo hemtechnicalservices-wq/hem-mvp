@@ -30,7 +30,7 @@ export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const next = resolveNextPath(searchParams.get("next"));
+  const next = resolveNextPath(searchParams?.get("next") ?? null);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
