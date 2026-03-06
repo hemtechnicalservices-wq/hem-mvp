@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
-const sb = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
-
 export async function POST(req: NextRequest) {
   try {
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!stripeKey || !supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json({ error: "Server payment configuration is missing." }, { status: 500 });
+    }
+
+    const stripe = new Stripe(stripeKey);
+    const sb = createClient(supabaseUrl, serviceRoleKey);
+
     const { invoiceId } = await req.json();
     if (!invoiceId) return NextResponse.json({ error: "Missing invoiceId" }, { status: 400 });
 
@@ -51,9 +55,11 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
-
     return NextResponse.json({ url: session.url });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Server error" },
+      { status: 500 }
+    );
   }
 }

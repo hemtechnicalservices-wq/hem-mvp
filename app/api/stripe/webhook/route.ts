@@ -4,15 +4,19 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
-const sb = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
-
 export async function POST(req: NextRequest) {
   try {
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!stripeKey || !webhookSecret || !supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json({ error: "Server webhook configuration is missing." }, { status: 500 });
+    }
+
+    const stripe = new Stripe(stripeKey);
+    const sb = createClient(supabaseUrl, serviceRoleKey);
+
     const sig = req.headers.get("stripe-signature");
     if (!sig) return NextResponse.json({ error: "Missing signature" }, { status: 400 });
 
@@ -38,7 +42,10 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ received: true });
-  } catch {
-    return NextResponse.json({ error: "Invalid webhook payload" }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Invalid webhook payload" },
+      { status: 400 }
+    );
   }
 }
