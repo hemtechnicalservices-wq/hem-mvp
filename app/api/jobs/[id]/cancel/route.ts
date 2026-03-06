@@ -6,12 +6,11 @@ function isJobsStatusCheckError(message: string | undefined): boolean {
 }
 
 export async function POST(
-  req: NextRequest,
+  _req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createSupabaseServerClient();
   const { id } = await ctx.params;
-  const { action } = (await req.json()) as { action: "accept" | "reject" };
 
   const {
     data: { user },
@@ -19,29 +18,21 @@ export async function POST(
 
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const status = action === "accept" ? "approved" : "cancelled";
-  let { data, error } = await supabase
+  let { error } = await supabase
     .from("jobs")
-    .update({ status })
+    .update({ status: "cancelled" })
     .eq("id", id)
-    .eq("client_id", user.id)
-    .select("id,status")
-    .maybeSingle();
+    .eq("client_id", user.id);
 
   if (error && isJobsStatusCheckError(error.message)) {
-    const fallbackStatus = action === "accept" ? "in_progress" : "new";
     const fallback = await supabase
       .from("jobs")
-      .update({ status: fallbackStatus })
+      .update({ status: "new" })
       .eq("id", id)
-      .eq("client_id", user.id)
-      .select("id,status")
-      .maybeSingle();
-    data = fallback.data;
+      .eq("client_id", user.id);
     error = fallback.error;
   }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  if (!data) return NextResponse.json({ error: "Job not found for this client." }, { status: 404 });
-  return NextResponse.json({ ok: true, job: data });
+  return NextResponse.json({ ok: true });
 }
