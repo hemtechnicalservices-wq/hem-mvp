@@ -1,104 +1,72 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { NextRequest, NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-async function createSupabaseRouteClient() {
-  const cookieStore = await cookies();
+export async function GET(req: NextRequest) {
+  const supabase = await createSupabaseServerClient();
+  const mine = req.nextUrl.searchParams.get("mine");
 
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll() {
-          // Route handlers can't mutate request cookies.
-          // Session refresh should be handled in middleware.
-        },
-      },
-    }
-  );
-}
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-export async function POST(req: Request) {
-  try {
-    const supabase = await createSupabaseRouteClient();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError) {
-      return NextResponse.json({ ok: false, error: userError.message }, { status: 401 });
-    }
-
-    if (!user) {
-      return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
-    }
-
-    const body = await req.json();
-    const service = (body.service ?? "").trim();
-    const notes = (body.notes ?? "").trim();
-
-    if (!service) {
-      return NextResponse.json({ ok: false, error: "Service is required" }, { status: 400 });
-    }
-
+  if (mine === "1") {
     const { data, error } = await supabase
       .from("jobs")
-      .insert({
-        service,
-        notes,
-        status: "new",
-        created_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true, job: data });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Server error";
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
-  }
-}
-
-export async function GET() {
-  try {
-    const supabase = await createSupabaseRouteClient();
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError) {
-      return NextResponse.json({ ok: false, error: userError.message }, { status: 401 });
-    }
-
-    if (!user) {
-      return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
-    }
-
-    const { data, error } = await supabase
-      .from("jobs")
-      .select("*")
-      .eq("created_by", user.id)
+      .select("id,status,description,created_at")
+      .eq("client_id", user.id)
       .order("created_at", { ascending: false });
 
-    if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true, jobs: data });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Server error";
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ jobs: data ?? [] });
   }
+
+  return NextResponse.json({ jobs: [] });
+}
+
+export async function POST(req: NextRequest) {
+  const supabase = await createSupabaseServerClient();
+  const body = await req.json();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { category, issue, description, address, preferredAt } = body as {
+    category?: string;
+    issue?: string;
+    description?: string;
+    address?: string;
+    preferredAt?: string;
+  };
+
+  const { data: addressRow, error: addressErr } = await supabase
+    .from("client_addresses")
+    .insert({
+      client_id: user.id,
+      address_line: address ?? "N/A",
+      label: "Primary",
+    })
+    .select("id")
+    .single();
+
+  if (addressErr) return NextResponse.json({ error: addressErr.message }, { status: 400 });
+
+  const { data: job, error: jobErr } = await supabase
+    .from("jobs")
+    .insert({
+      client_id: user.id,
+      description: `${category ?? ""} / ${issue ?? ""} - ${description ?? ""}`.trim(),
+      address_id: addressRow.id,
+      preferred_at: preferredAt || null,
+      status: "new",
+    })
+    .select("id,status,created_at")
+    .single();
+
+  if (jobErr) return NextResponse.json({ error: jobErr.message }, { status: 400 });
+  return NextResponse.json({ ok: true, job });
 }
