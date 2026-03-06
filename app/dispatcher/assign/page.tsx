@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import supabase from "@/lib/supabase/client";
 
 type JobRow = {
   id: string;
@@ -22,7 +22,7 @@ type TechRow = {
 export default function AssignJobPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const jobId = params.id;
+  const jobId = params?.id;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -41,6 +41,10 @@ export default function AssignJobPage() {
       router.replace("/dispatcher/login");
       setLoading(false);
       return;
+    }
+
+    if (!jobId) {
+      return <div>Invalid job id.</div>;
     }
 
     const { data: jobRow, error: jobErr } = await supabase
@@ -79,6 +83,7 @@ export default function AssignJobPage() {
   };
 
   useEffect(() => {
+    if (!jobId) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);

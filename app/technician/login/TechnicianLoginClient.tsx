@@ -1,10 +1,9 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { FormEvent, useState } from "react";
+import supabase from "@/lib/supabase/client";
 
 export default function TechnicianLoginClient() {
-  const supabase = useMemo(() => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!), []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);

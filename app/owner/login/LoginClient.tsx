@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import supabase from "@/lib/supabase/client";
 import { SupabaseClient } from "@supabase/supabase-js";
 
 function resolveNextPath(nextParam: string | null) {
@@ -30,7 +30,7 @@ export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const next = resolveNextPath(searchParams.get("next"));
+  const next = resolveNextPath(searchParams?.get("next") ?? null);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

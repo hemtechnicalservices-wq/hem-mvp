@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import supabase from "@/lib/supabase/client";
 
 type JobRow = {
   id: string;
@@ -25,7 +25,7 @@ function normalizeJobStatus(s: string | null) {
 export default function JobDetailsPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const jobId = params.id;
+  const jobId = params?.id;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

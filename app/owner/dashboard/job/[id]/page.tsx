@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import supabase from "@/lib/supabase/client";
 import type { Database } from "@/lib/database.types";
 
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
@@ -15,7 +15,7 @@ type TechnicianOption = Pick<
 export default function JobDetailsPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const jobId = params.id;
+  const jobId = params?.id;
 
   const [job, setJob] = useState<JobRow | null>(null);
   const [techs, setTechs] = useState<TechnicianOption[]>([]);
@@ -26,6 +26,8 @@ export default function JobDetailsPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!jobId) return;
+
     let cancelled = false;
 
     const load = async () => {
