@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import supabase from "@/lib/supabase/client";
 import { SupabaseClient } from "@supabase/supabase-js";
 
 function resolveNextPath(nextParam: string | null) {
