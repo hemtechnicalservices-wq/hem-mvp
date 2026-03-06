@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import type { Database } from "../../lib/database.types";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function OwnerPage() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,16 +9,7 @@ export default async function OwnerPage() {
     redirect("/owner/login?error=Missing%20env");
   }
 
-  const cookieStore = await cookies();
-
-  const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll: (): Array<{ name: string; value: string }> => cookieStore.getAll(),
-      setAll: (_cookiesToSet: Array<{ name: string; value: string; options: object }>) => {
-        // no-op in server page
-      },
-    },
-  });
+  const supabase = await createSupabaseServerClient();
 
   const {
     data: { user },

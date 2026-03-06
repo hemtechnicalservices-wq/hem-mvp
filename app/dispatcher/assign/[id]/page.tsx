@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import supabase from "../../../../lib/supabase/client";
+import supabase from "@/lib/supabase/client";
 
 type JobRow = {
   id: string;
@@ -22,8 +22,8 @@ type TechRow = {
 
 export default function AssignJobPage() {
   const router = useRouter();
-  const params = useParams();
-  const jobId = typeof params?.id === "string" ? params.id : "";
+  const params = useParams<{ id: string }>();
+  const jobId = params?.id ?? "";
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -33,15 +33,21 @@ export default function AssignJobPage() {
   const [selectedTechId, setSelectedTechId] = useState("");
 
   useEffect(() => {
+    let mounted = true;
+
     const load = async () => {
       if (!jobId) {
-        setErrMsg("Missing job id.");
-        setLoading(false);
+        if (mounted) {
+          setErrMsg("Missing job id.");
+          setLoading(false);
+        }
         return;
       }
 
-      setLoading(true);
-      setErrMsg(null);
+      if (mounted) {
+        setLoading(true);
+        setErrMsg(null);
+      }
 
       const { data: sess } = await supabase.auth.getSession();
       if (!sess?.session?.user) {
@@ -53,35 +59,53 @@ export default function AssignJobPage() {
         .from("jobs")
         .select("id, service, notes, status, technician_id")
         .eq("id", jobId)
-        .single();
+        .maybeSingle<JobRow>();
 
       if (jobErr) {
-        setErrMsg(jobErr.message);
-        setLoading(false);
+        if (mounted) {
+          setErrMsg(jobErr.message);
+          setLoading(false);
+        }
         return;
       }
 
-      setJob(jobData as JobRow);
-      setSelectedTechId((jobData as JobRow).technician_id ?? "");
+      if (!jobData) {
+        if (mounted) {
+          setJob(null);
+          setLoading(false);
+        }
+        return;
+      }
 
       const { data: techData, error: techErr } = await supabase
         .from("technicians")
         .select("id, full_name, is_active, role")
         .or("is_active.is.null,is_active.eq.true")
-        .order("full_name", { ascending: true });
+        .order("full_name", { ascending: true })
+        .returns<TechRow[]>();
 
       if (techErr) {
-        setErrMsg(techErr.message);
-        setTechs([]);
-        setLoading(false);
+        if (mounted) {
+          setErrMsg(techErr.message);
+          setTechs([]);
+          setLoading(false);
+        }
         return;
       }
 
-      setTechs((techData ?? []) as TechRow[]);
-      setLoading(false);
+      if (mounted) {
+        setJob(jobData);
+        setSelectedTechId(jobData.technician_id ?? "");
+        setTechs(techData ?? []);
+        setLoading(false);
+      }
     };
 
-    load();
+    void load();
+
+    return () => {
+      mounted = false;
+    };
   }, [jobId, router]);
 
   const signOut = async () => {
@@ -124,10 +148,18 @@ export default function AssignJobPage() {
       {errMsg ? <p style={{ color: "crimson" }}>{errMsg}</p> : null}
 
       <div style={{ border: "1px solid #ddd", borderRadius: 14, padding: 14 }}>
-        <div><b>Job ID:</b> {job.id}</div>
-        <div><b>Service:</b> {job.service ?? "—"}</div>
-        <div><b>Status:</b> {job.status ?? "—"}</div>
-        <div><b>Notes:</b> {job.notes ?? "—"}</div>
+        <div>
+          <b>Job ID:</b> {job.id}
+        </div>
+        <div>
+          <b>Service:</b> {job.service ?? "—"}
+        </div>
+        <div>
+          <b>Status:</b> {job.status ?? "—"}
+        </div>
+        <div>
+          <b>Notes:</b> {job.notes ?? "—"}
+        </div>
 
         <div style={{ marginTop: 16 }}>
           <label>
