@@ -3,10 +3,13 @@
 import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ISSUES_BY_CATEGORY, SERVICE_CATEGORIES } from "../spec";
+import { clientFetch } from "@/lib/client/client-auth";
 
 type RequestForm = {
   category: string;
   issue: string;
+  customIssue: string;
+  urgency: "normal" | "emergency";
   description: string;
   address: string;
   buildingName: string;
@@ -21,15 +24,20 @@ type RequestForm = {
 };
 
 function issueOptions(category: string): readonly string[] {
-  return ISSUES_BY_CATEGORY[category] ?? ["General issue"];
+  const base = ISSUES_BY_CATEGORY[category] ?? ["General issue"];
+  return [...base, "Another (custom issue)"];
 }
 
 export default function NewRequestClient({
   initialService,
   initialIssue,
+  initialUrgency,
+  initialAsap,
 }: {
   initialService?: string;
   initialIssue?: string;
+  initialUrgency?: string;
+  initialAsap?: boolean;
 }) {
   const router = useRouter();
   const safeInitialCategory = initialService && ISSUES_BY_CATEGORY[initialService]
@@ -41,6 +49,8 @@ export default function NewRequestClient({
     issue: initialIssue && issueOptions(safeInitialCategory).includes(initialIssue)
       ? initialIssue
       : issueOptions(safeInitialCategory)[0],
+    customIssue: "",
+    urgency: initialUrgency === "emergency" ? "emergency" : "normal",
     description: "",
     address: "",
     buildingName: "",
@@ -49,7 +59,7 @@ export default function NewRequestClient({
     parkingInstructions: "",
     preferredDate: "",
     preferredTime: "",
-    asap: false,
+    asap: Boolean(initialAsap),
     phone: "",
     whatsapp: "",
   });
@@ -81,7 +91,7 @@ export default function NewRequestClient({
 
       const payload = {
         category: form.category,
-        issue: form.issue,
+        issue: form.issue === "Another (custom issue)" ? form.customIssue || "Another issue" : form.issue,
         description: [
           form.description,
           `Building/Villa: ${form.buildingName || "N/A"}`,
@@ -91,16 +101,25 @@ export default function NewRequestClient({
           `Contact Phone: ${form.phone || "N/A"}`,
           `WhatsApp: ${form.whatsapp || "N/A"}`,
           `Schedule: ${form.asap ? "ASAP" : `${form.preferredDate} ${form.preferredTime}`}`,
+          `Urgency: ${form.urgency}`,
+          `Custom issue: ${form.issue === "Another (custom issue)" ? (form.customIssue || "N/A") : "N/A"}`,
         ].join("\n"),
         address: form.address,
         preferredAt: preferredAt || null,
+        contactPhone: form.phone,
+        contactWhatsapp: form.whatsapp,
       };
 
-      const res = await fetch("/api/jobs", {
+      const res = await clientFetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
+      if (res.status === 401) {
+        router.push(`/login?next=${encodeURIComponent("/client/new-request")}`);
+        return;
+      }
 
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Failed to submit request");
@@ -111,7 +130,7 @@ export default function NewRequestClient({
       if (media.length > 0) {
         const mediaForm = new FormData();
         media.forEach((file) => mediaForm.append("files", file));
-        const mediaResponse = await fetch(`/api/jobs/${createdJobId}/media`, {
+        const mediaResponse = await clientFetch(`/api/jobs/${createdJobId}/media`, {
           method: "POST",
           body: mediaForm,
         });
@@ -119,14 +138,7 @@ export default function NewRequestClient({
         if (!mediaResponse.ok) throw new Error(mediaData?.error ?? "Media upload failed");
       }
 
-      const qp = new URLSearchParams({
-        id: createdJobId,
-        category: form.category,
-        issue: form.issue,
-        submittedAt: new Date().toISOString(),
-        status: "Pending review",
-      });
-      router.push(`/client/requests/confirmation?${qp.toString()}`);
+      router.push(`/client?request=received&job=${encodeURIComponent(createdJobId)}`);
     } catch (error) {
       setMsg(error instanceof Error ? error.message : "Failed");
     } finally {
@@ -137,16 +149,16 @@ export default function NewRequestClient({
   return (
     <main className="p-4 md:p-6 space-y-5">
       <section>
-        <h1 className="text-2xl font-semibold">New Service Request</h1>
-        <p className="text-sm text-slate-600 mt-1">Fill required details to submit your maintenance request.</p>
+        <h1 className="text-2xl font-semibold text-[#f2f2f2]">New Service Request</h1>
+        <p className="hem-muted mt-1 text-sm">Fill required details to submit your maintenance request.</p>
       </section>
 
       <form onSubmit={submit} className="space-y-4">
-        <section className="grid gap-4 md:grid-cols-2 bg-white border rounded-xl p-4">
-          <label className="text-sm">
+        <section className="hem-card grid gap-4 rounded-xl border border-[#5f4d1d] p-4 md:grid-cols-2">
+          <label className="text-sm text-[#e8e8e8]">
             Service category
             <select
-              className="mt-1 border rounded-lg p-2 w-full"
+              className="hem-input mt-1"
               value={form.category}
               onChange={(e) => onCategoryChange(e.target.value)}
             >
@@ -156,10 +168,10 @@ export default function NewRequestClient({
             </select>
           </label>
 
-          <label className="text-sm">
+          <label className="text-sm text-[#e8e8e8]">
             Issue type
             <select
-              className="mt-1 border rounded-lg p-2 w-full"
+              className="hem-input mt-1"
               value={form.issue}
               onChange={(e) => setForm((prev) => ({ ...prev, issue: e.target.value }))}
             >
@@ -169,53 +181,83 @@ export default function NewRequestClient({
             </select>
           </label>
 
-          <label className="text-sm md:col-span-2">
+          {form.issue === "Another (custom issue)" ? (
+            <label className="text-sm text-[#e8e8e8] md:col-span-2">
+              Write your issue
+              <input
+                className="hem-input mt-1"
+                value={form.customIssue}
+                onChange={(e) => setForm((prev) => ({ ...prev, customIssue: e.target.value }))}
+                placeholder="Type your custom issue"
+                required
+              />
+            </label>
+          ) : null}
+
+          <label className="text-sm text-[#e8e8e8]">
+            Urgency
+            <select
+              className="hem-input mt-1"
+              value={form.urgency}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  urgency: (e.target.value === "emergency" ? "emergency" : "normal"),
+                }))
+              }
+            >
+              <option value="normal">Normal</option>
+              <option value="emergency">Emergency</option>
+            </select>
+          </label>
+
+          <label className="text-sm text-[#e8e8e8] md:col-span-2">
             Problem description
             <textarea
-              className="mt-1 border rounded-lg p-2 w-full min-h-24"
+              className="hem-input mt-1 min-h-24"
               value={form.description}
               onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
               required
             />
           </label>
 
-          <label className="text-sm md:col-span-2">
+          <label className="text-sm text-[#e8e8e8] md:col-span-2">
             Upload photos/videos
-            <input className="mt-1 block" type="file" multiple accept="image/*,video/*" onChange={onMediaChange} />
-            <span className="text-xs text-slate-500">
+            <input className="hem-input mt-1 block file:mr-3 file:rounded-md file:border-0 file:bg-[#2a2a2a] file:px-3 file:py-2 file:text-[#f3f3f3]" type="file" multiple accept="image/*,video/*" onChange={onMediaChange} />
+            <span className="hem-muted text-xs">
               {media.length > 0 ? `${media.length} file(s) selected` : "No files selected"}
             </span>
           </label>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 bg-white border rounded-xl p-4">
-          <label className="text-sm md:col-span-2">
+        <section className="hem-card grid gap-4 rounded-xl border border-[#5f4d1d] p-4 md:grid-cols-2">
+          <label className="text-sm text-[#e8e8e8] md:col-span-2">
             Address
-            <input className="mt-1 border rounded-lg p-2 w-full" value={form.address} onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))} required />
+            <input className="hem-input mt-1" value={form.address} onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))} required />
           </label>
-          <label className="text-sm">
+          <label className="text-sm text-[#e8e8e8]">
             Building / villa name
-            <input className="mt-1 border rounded-lg p-2 w-full" value={form.buildingName} onChange={(e) => setForm((prev) => ({ ...prev, buildingName: e.target.value }))} />
+            <input className="hem-input mt-1" value={form.buildingName} onChange={(e) => setForm((prev) => ({ ...prev, buildingName: e.target.value }))} />
           </label>
-          <label className="text-sm">
+          <label className="text-sm text-[#e8e8e8]">
             Apartment number
-            <input className="mt-1 border rounded-lg p-2 w-full" value={form.apartmentNumber} onChange={(e) => setForm((prev) => ({ ...prev, apartmentNumber: e.target.value }))} />
+            <input className="hem-input mt-1" value={form.apartmentNumber} onChange={(e) => setForm((prev) => ({ ...prev, apartmentNumber: e.target.value }))} />
           </label>
-          <label className="text-sm">
+          <label className="text-sm text-[#e8e8e8]">
             Area
-            <input className="mt-1 border rounded-lg p-2 w-full" value={form.area} onChange={(e) => setForm((prev) => ({ ...prev, area: e.target.value }))} />
+            <input className="hem-input mt-1" value={form.area} onChange={(e) => setForm((prev) => ({ ...prev, area: e.target.value }))} />
           </label>
-          <label className="text-sm">
+          <label className="text-sm text-[#e8e8e8]">
             Parking instructions
-            <input className="mt-1 border rounded-lg p-2 w-full" value={form.parkingInstructions} onChange={(e) => setForm((prev) => ({ ...prev, parkingInstructions: e.target.value }))} />
+            <input className="hem-input mt-1" value={form.parkingInstructions} onChange={(e) => setForm((prev) => ({ ...prev, parkingInstructions: e.target.value }))} />
           </label>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 bg-white border rounded-xl p-4">
-          <label className="text-sm">
+        <section className="hem-card grid gap-4 rounded-xl border border-[#5f4d1d] p-4 md:grid-cols-2">
+          <label className="text-sm text-[#e8e8e8]">
             Preferred date
             <input
-              className="mt-1 border rounded-lg p-2 w-full"
+              className="hem-input mt-1"
               type="date"
               value={form.preferredDate}
               onChange={(e) => setForm((prev) => ({ ...prev, preferredDate: e.target.value }))}
@@ -223,10 +265,10 @@ export default function NewRequestClient({
               required={!form.asap}
             />
           </label>
-          <label className="text-sm">
+          <label className="text-sm text-[#e8e8e8]">
             Preferred time
             <input
-              className="mt-1 border rounded-lg p-2 w-full"
+              className="hem-input mt-1"
               type="time"
               value={form.preferredTime}
               onChange={(e) => setForm((prev) => ({ ...prev, preferredTime: e.target.value }))}
@@ -234,29 +276,29 @@ export default function NewRequestClient({
               required={!form.asap}
             />
           </label>
-          <label className="text-sm md:col-span-2 inline-flex items-center gap-2">
+          <label className="text-sm text-[#e8e8e8] md:col-span-2 inline-flex items-center gap-2">
             <input type="checkbox" checked={form.asap} onChange={(e) => setForm((prev) => ({ ...prev, asap: e.target.checked }))} />
             ASAP
           </label>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 bg-white border rounded-xl p-4">
-          <label className="text-sm">
+        <section className="hem-card grid gap-4 rounded-xl border border-[#5f4d1d] p-4 md:grid-cols-2">
+          <label className="text-sm text-[#e8e8e8]">
             Phone number
-            <input className="mt-1 border rounded-lg p-2 w-full" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} required />
+            <input className="hem-input mt-1" value={form.phone} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} required />
           </label>
-          <label className="text-sm">
+          <label className="text-sm text-[#e8e8e8]">
             WhatsApp number
-            <input className="mt-1 border rounded-lg p-2 w-full" value={form.whatsapp} onChange={(e) => setForm((prev) => ({ ...prev, whatsapp: e.target.value }))} />
+            <input className="hem-input mt-1" value={form.whatsapp} onChange={(e) => setForm((prev) => ({ ...prev, whatsapp: e.target.value }))} />
           </label>
         </section>
 
-        <button className="border rounded-lg px-4 py-2 bg-white" disabled={loading}>
+        <button className="hem-btn-primary" disabled={loading}>
           {loading ? "Submitting..." : "Submit Request"}
         </button>
       </form>
 
-      {msg ? <p className="text-sm text-red-700">{msg}</p> : null}
+      {msg ? <p className="text-sm text-[#ff6b6b]">{msg}</p> : null}
     </main>
   );
 }

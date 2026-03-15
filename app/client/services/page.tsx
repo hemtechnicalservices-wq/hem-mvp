@@ -26,10 +26,10 @@ export default function ServicesPage() {
   return (
     <main className="p-4 md:p-6 space-y-6">
       <section>
-        <h1 className="text-2xl font-semibold">Services</h1>
-        <p className="text-sm text-slate-600 mt-1">Select a service to choose issue type and raise request.</p>
+        <h1 className="text-2xl font-semibold text-[#f2f2f2]">Services</h1>
+        <p className="hem-muted mt-1 text-sm">Select a service to choose issue type and raise request.</p>
         <input
-          className="mt-3 border rounded-lg p-2 w-full max-w-xl bg-white"
+          className="hem-input mt-3 w-full max-w-xl"
           placeholder="Search service category"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -38,17 +38,17 @@ export default function ServicesPage() {
 
       <section className="grid gap-4 sm:grid-cols-2">
         {filteredServices.map((service) => (
-          <article key={service.key} className="border rounded-xl p-4 bg-white space-y-3">
+          <article key={service.key} className="hem-card space-y-3 rounded-xl border border-[#5f4d1d] p-4">
             <div className="flex items-start gap-3">
               <span className="text-2xl leading-none">{service.icon}</span>
               <div>
-                <h2 className="text-lg font-semibold">{service.name}</h2>
-                <p className="text-sm text-slate-600">{service.description}</p>
+                <h2 className="text-lg font-semibold text-[#f5f5f5]">{service.name}</h2>
+                <p className="hem-muted text-sm">{service.description}</p>
               </div>
             </div>
             <Link
               href={`/client/services/${service.key}`}
-              className="inline-block border rounded-lg px-3 py-2 text-sm"
+              className="inline-block rounded-lg border border-[#9e8435] bg-[#171717] px-3 py-2 text-sm text-[#f0d67b] hover:border-[#d4af37]"
             >
               Choose Issue
             </Link>
@@ -56,7 +56,7 @@ export default function ServicesPage() {
         ))}
       </section>
 
-      {filteredServices.length === 0 ? <p className="text-sm">No matching services.</p> : null}
+      {filteredServices.length === 0 ? <p className="hem-muted text-sm">No matching services.</p> : null}
     </main>
   );
 }

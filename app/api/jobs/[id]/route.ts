@@ -41,6 +41,7 @@ export async function GET(
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   let addressLine: string | null = null;
+  let latestQuote: Record<string, unknown> | null = null;
   if (job.address_id) {
     const { data: address } = await supabase
       .from("client_addresses")
@@ -50,10 +51,20 @@ export async function GET(
     addressLine = address?.address_line ?? null;
   }
 
+  const { data: quote } = await supabase
+    .from("quotes")
+    .select("id,inspection_fee,labor_cost,materials_cost,discount,total_price,status,quote_notes,updated_at,created_at")
+    .eq("job_id", id)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  latestQuote = (quote as Record<string, unknown> | null) ?? null;
+
   return NextResponse.json({
     job: {
       ...job,
       address_line: addressLine,
+      quote: latestQuote,
     },
   });
 }

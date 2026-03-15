@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
 const FALLBACK_SUPABASE_URL = "https://zqlcbkohswcmrlslusce.supabase.co";
 const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_h7lV-bv0TNaIF8uzi_lkRA_7OKAw9kg";
@@ -22,7 +22,7 @@ function getRequiredEnv(
 const SUPABASE_URL = getRequiredEnv("NEXT_PUBLIC_SUPABASE_URL", "VITE_SUPABASE_URL");
 const SUPABASE_ANON_KEY = getRequiredEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY");
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export { supabase };
 export default supabase;

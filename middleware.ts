@@ -18,6 +18,7 @@ export function middleware(req: NextRequest) {
     const publicRoutes = [
       "/",
       "/login",
+      "/dispatcher/login",
       "/owner/login",
       "/technician/login",
       "/reset-password",
@@ -30,39 +31,6 @@ export function middleware(req: NextRequest) {
 
     if (publicRoutes.some((r) => pathname === r || pathname.startsWith(r + "/"))) {
       return NextResponse.next();
-    }
-
-    // Basic auth check via cookies (adjust cookie names if yours differ)
-    const ownerToken = req.cookies.get("owner_token")?.value;
-    const techToken = req.cookies.get("tech_token")?.value;
-
-    // Role-based protection
-    if (pathname.startsWith("/owner")) {
-      if (!ownerToken) {
-        const url = req.nextUrl.clone();
-        url.pathname = "/owner/login";
-        url.searchParams.set("next", pathname);
-        return NextResponse.redirect(url);
-      }
-    }
-
-    if (pathname.startsWith("/technician")) {
-      if (!techToken) {
-        const url = req.nextUrl.clone();
-        url.pathname = "/technician/login";
-        url.searchParams.set("next", pathname);
-        return NextResponse.redirect(url);
-      }
-    }
-
-    // Dispatcher area (if you use it)
-    if (pathname.startsWith("/dispatcher")) {
-      if (!ownerToken) {
-        const url = req.nextUrl.clone();
-        url.pathname = "/login";
-        url.searchParams.set("next", pathname);
-        return NextResponse.redirect(url);
-      }
     }
 
     return NextResponse.next();

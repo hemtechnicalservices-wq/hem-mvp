@@ -5,6 +5,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { CLIENT_TIMELINE } from "../../spec";
+import QuoteTemplate from "@/components/QuoteTemplate";
+import ClientActionButtons from "@/components/ClientActionButtons";
+import { downloadQuotePdf } from "@/lib/pdf/download";
+import CommunicationCard from "@/components/job/CommunicationCard";
+import { isChatEnabledByStatus } from "@/lib/workflow/communication";
+import { clientFetch } from "@/lib/client/client-auth";
 
 type JobDetails = {
   id: string;
@@ -14,6 +20,17 @@ type JobDetails = {
   preferred_at: string | null;
   assigned_technician_id: string | null;
   address_line: string | null;
+  quote?: {
+    id?: string;
+    inspection_fee?: number | null;
+    labor_cost?: number | null;
+    materials_cost?: number | null;
+    discount?: number | null;
+    total_price?: number | null;
+    status?: string | null;
+    quote_notes?: string | null;
+    updated_at?: string | null;
+  } | null;
 };
 
 type Media = {
@@ -25,10 +42,12 @@ type Media = {
 function stageFromStatus(status: string): number {
   const s = status.toLowerCase();
   if (s.includes("cancel")) return 0;
-  if (s.includes("paid")) return 8;
-  if (s.includes("invoice")) return 7;
-  if (s.includes("done") || s.includes("complete")) return 6;
-  if (s.includes("progress")) return 5;
+  if (s.includes("closed")) return 10;
+  if (s.includes("paid")) return 9;
+  if (s.includes("invoice")) return 8;
+  if (s.includes("done") || s.includes("complete")) return 7;
+  if (s.includes("progress")) return 6;
+  if (s.includes("arrived")) return 5;
   if (s.includes("way")) return 4;
   if (s.includes("assigned")) return 3;
   if (s.includes("approved")) return 2;
@@ -51,31 +70,43 @@ export default function ClientJobDetailsPage({ params }: { params: Promise<{ id:
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
+  const [quoteQuestion, setQuoteQuestion] = useState("");
   const [quoteChoice, setQuoteChoice] = useState<"accept" | "reject" | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const jobId = routeParams?.id ?? "";
 
+  const loadJobDetails = async () => {
+    if (!jobId) return;
+    const [jobRes, mediaRes] = await Promise.all([
+      clientFetch(`/api/jobs/${jobId}`, { cache: "no-store" }),
+      clientFetch(`/api/jobs/${jobId}/media`, { cache: "no-store" }),
+    ]);
+
+    const jobData = await jobRes.json().catch(() => null);
+    const mediaData = await mediaRes.json().catch(() => null);
+
+    if (jobRes.ok && jobData?.job) setJob(jobData.job as JobDetails);
+    if (mediaRes.ok) setMedia((mediaData?.media ?? []) as Media[]);
+  };
+
   useEffect(() => {
     if (!jobId) return;
-
-    (async () => {
-      const [jobRes, mediaRes] = await Promise.all([
-        fetch(`/api/jobs/${jobId}`),
-        fetch(`/api/jobs/${jobId}/media`),
-      ]);
-
-      const jobData = await jobRes.json();
-      const mediaData = await mediaRes.json();
-
-      if (jobRes.ok) setJob(jobData.job as JobDetails);
-      if (mediaRes.ok) setMedia((mediaData.media ?? []) as Media[]);
-    })();
+    void loadJobDetails();
+    const timer = window.setInterval(() => void loadJobDetails(), 7000);
+    const onFocus = () => void loadJobDetails();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [jobId, params]);
 
   const stage = useMemo(() => stageFromStatus(job?.status ?? ""), [job?.status]);
   const effectiveQuoteChoice = quoteChoice ?? quoteChoiceFromStatus(job?.status);
+  const quoteBaseDate = job?.quote?.updated_at ?? job?.created_at ?? "1970-01-01T00:00:00.000Z";
+  const quoteNumber = `Q-${new Date(quoteBaseDate).getFullYear()}-${String(job?.quote?.id ?? job?.id ?? "").slice(0, 4).toUpperCase()}`;
 
   async function onCancel() {
     if (!jobId) {
@@ -83,7 +114,7 @@ export default function ClientJobDetailsPage({ params }: { params: Promise<{ id:
       return;
     }
     setMessage("Cancelling...");
-    const res = await fetch(`/api/jobs/${jobId}/cancel`, { method: "POST" });
+    const res = await clientFetch(`/api/jobs/${jobId}/cancel`, { method: "POST" });
     const data = await res.json();
     if (!res.ok) {
       setMessage(data?.error ?? "Failed to cancel request");
@@ -101,7 +132,7 @@ export default function ClientJobDetailsPage({ params }: { params: Promise<{ id:
     setQuoteChoice(action);
     setJob((prev) => (prev ? { ...prev, status: action === "accept" ? "approved" : "cancelled" } : prev));
     setMessage("Updating quote response...");
-    const res = await fetch(`/api/jobs/${jobId}/quote-response`, {
+    const res = await clientFetch(`/api/jobs/${jobId}/quote-response`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
@@ -111,11 +142,36 @@ export default function ClientJobDetailsPage({ params }: { params: Promise<{ id:
       setMessage(data?.error ?? "Failed to update quote");
       return;
     }
-    const refreshed = await fetch(`/api/jobs/${jobId}`);
+    const refreshed = await clientFetch(`/api/jobs/${jobId}`);
     const refreshedData = await refreshed.json();
     if (refreshed.ok && refreshedData?.job) setJob(refreshedData.job as JobDetails);
     setQuoteChoice(action);
     setMessage(action === "accept" ? "Quote approved." : "Quote rejected.");
+  }
+
+  async function onQuoteQuestion() {
+    if (!jobId) {
+      setMessage("Unable to identify this job.");
+      return;
+    }
+    if (!quoteQuestion.trim()) {
+      setMessage("Please type your question first.");
+      return;
+    }
+    setMessage("Sending question...");
+    const res = await clientFetch(`/api/jobs/${jobId}/quote-response`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "question", question: quoteQuestion.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setMessage(data?.error ?? "Failed to send question");
+      return;
+    }
+    setQuoteQuestion("");
+    setJob((prev) => (prev ? { ...prev, status: "waiting_quote" } : prev));
+    setMessage("Question sent to dispatcher.");
   }
 
   async function onAddMedia(selectedFiles?: File[]) {
@@ -133,7 +189,7 @@ export default function ClientJobDetailsPage({ params }: { params: Promise<{ id:
     setMessage("Uploading media...");
     const form = new FormData();
     filesToUpload.forEach((file) => form.append("files", file));
-    const res = await fetch(`/api/jobs/${jobId}/media`, { method: "POST", body: form });
+    const res = await clientFetch(`/api/jobs/${jobId}/media`, { method: "POST", body: form });
     const data = await res.json();
     if (!res.ok) {
       setMessage(data?.error ?? "Media upload failed");
@@ -141,7 +197,7 @@ export default function ClientJobDetailsPage({ params }: { params: Promise<{ id:
       return;
     }
 
-    const mediaRes = await fetch(`/api/jobs/${jobId}/media`);
+    const mediaRes = await clientFetch(`/api/jobs/${jobId}/media`);
     const mediaData = await mediaRes.json();
     if (mediaRes.ok) setMedia((mediaData.media ?? []) as Media[]);
 
@@ -163,25 +219,53 @@ export default function ClientJobDetailsPage({ params }: { params: Promise<{ id:
     }
   }
 
-  function onSaveNote() {
+  async function onSaveNote() {
     if (!note.trim()) return;
-    setJob((prev) => (prev ? { ...prev, description: `${prev.description ?? ""}\nClient note: ${note}` } : prev));
+    if (!jobId) {
+      setMessage("Unable to identify this job.");
+      return;
+    }
+    setMessage("Saving note...");
+    const res = await clientFetch(`/api/jobs/${jobId}/client-note`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: note.trim() }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      setMessage(data?.error ?? "Failed to save note.");
+      return;
+    }
+    const refreshed = await clientFetch(`/api/jobs/${jobId}`);
+    const refreshedData = await refreshed.json().catch(() => null);
+    if (refreshed.ok && refreshedData?.job) setJob(refreshedData.job as JobDetails);
     setNote("");
-    setMessage("Note added locally to request details.");
+    setMessage("Note saved.");
   }
 
   if (!job) return <main className="p-4 md:p-6 text-sm">Loading job...</main>;
 
   const mode = searchParams?.get("mode");
+  const communicationEnabled = isChatEnabledByStatus(job.status) && Boolean(job.assigned_technician_id);
+
+  async function onCallTechnician() {
+    const res = await clientFetch(`/api/communication/job/${jobId}/call`, { method: "POST" });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      setMessage(data?.error ?? "Call request failed.");
+      return;
+    }
+    setMessage(data?.message ?? "Secure call requested.");
+  }
 
   return (
     <main className="p-4 md:p-6 space-y-5">
-      <section className="border rounded-xl p-5 bg-white">
-        <h1 className="text-2xl font-semibold">Job Details</h1>
-        <p className="text-sm text-slate-600 mt-1">Track progress, technician status, quote, and media.</p>
+      <section className="hem-card border border-[#6f5a23] rounded-xl p-5">
+        <h1 className="hem-title text-2xl font-semibold">Job Details</h1>
+        <p className="text-sm text-[#d0d0d0] mt-1">Track progress, technician status, quote, and media.</p>
       </section>
 
-      <section className="border rounded-xl p-5 bg-white text-sm space-y-1">
+      <section className="hem-card border border-[#5f4d1d] rounded-xl p-5 text-sm space-y-1 text-[#ececec]">
         <p><strong>Job ID:</strong> {job.id}</p>
         <p><strong>Service / issue:</strong> {job.description?.split("\n")[0] ?? "-"}</p>
         <p><strong>Problem description:</strong> {job.description ?? "-"}</p>
@@ -189,15 +273,24 @@ export default function ClientJobDetailsPage({ params }: { params: Promise<{ id:
         <p><strong>Scheduled time:</strong> {job.preferred_at ? new Date(job.preferred_at).toLocaleString() : "ASAP / Not set"}</p>
       </section>
 
-      <section className="border rounded-xl p-5 bg-white text-sm space-y-1">
+      <section className="hem-card border border-[#5f4d1d] rounded-xl p-5 text-sm space-y-1 text-[#ececec]">
         <h2 className="text-lg font-semibold mb-2">Technician Information</h2>
         <p><strong>Name:</strong> {job.assigned_technician_id ? `Technician ${job.assigned_technician_id.slice(0, 8)}` : "Not assigned"}</p>
-        <p><strong>Phone:</strong> {job.assigned_technician_id ? "Available after assignment confirmation" : "-"}</p>
+        <p><strong>Phone:</strong> Hidden for privacy</p>
         <p><strong>Estimated arrival:</strong> {job.status.toLowerCase().includes("way") ? "Within scheduled slot" : "Pending"}</p>
         <p><strong>Status:</strong> {job.assigned_technician_id ? "Assigned" : "Pending"}</p>
       </section>
 
-      <section className="border rounded-xl p-5 bg-white">
+      <CommunicationCard
+        chatHref={`/client/jobs/${job.id}/chat`}
+        chatEnabled={communicationEnabled}
+        callEnabled={communicationEnabled}
+        onCall={onCallTechnician}
+        chatLabel="Chat with Technician"
+        callLabel="Call Technician"
+      />
+
+      <section className="hem-card border border-[#5f4d1d] rounded-xl p-5">
         <h2 className="text-lg font-semibold mb-2">Request Status Timeline</h2>
         <div className="space-y-2 text-sm">
           {CLIENT_TIMELINE.map((item, index) => (
@@ -209,46 +302,85 @@ export default function ClientJobDetailsPage({ params }: { params: Promise<{ id:
         </div>
       </section>
 
-      <section className="border rounded-xl p-5 bg-white space-y-3">
+      <section className="hem-card border border-[#5f4d1d] rounded-xl p-5 space-y-3">
         <h2 className="text-lg font-semibold">Quote Approval</h2>
-        <div className="text-sm space-y-1">
-          <p><strong>Inspection fee:</strong> AED 99</p>
-          <p><strong>Labor cost:</strong> AED 250</p>
-          <p><strong>Materials estimate:</strong> AED 150</p>
-          <p><strong>Discount:</strong> AED 0</p>
-          <p><strong>Total:</strong> AED 499</p>
+        {job.quote ? (
+          <QuoteTemplate
+            quoteNumber={quoteNumber}
+            issueDate={new Date(job.quote.updated_at ?? job.created_at).toLocaleDateString()}
+            validUntil={new Date(new Date(job.quote.updated_at ?? job.created_at).getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+            jobReference={`JOB-${job.id.slice(0, 8).toUpperCase()}`}
+            clientName="Client"
+            clientPhone="-"
+            clientEmail="-"
+            propertyAddress={job.address_line ?? "-"}
+            serviceTitle={job.description?.split("/")[0]?.trim() ?? "Service request"}
+            scopeOfWork={job.quote.quote_notes ?? job.description ?? "Detailed maintenance works as per approved scope."}
+            inspectionFee={Number(job.quote.inspection_fee ?? 0)}
+            laborCost={Number(job.quote.labor_cost ?? 0)}
+            materialsCost={Number(job.quote.materials_cost ?? 0)}
+            discount={Number(job.quote.discount ?? 0)}
+          />
+        ) : (
+          <p className="text-sm text-[#bdbdbd]">Quote not sent yet.</p>
+        )}
+        <div className="text-xs">
+          {effectiveQuoteChoice === "accept" ? (
+            <span className="inline-flex rounded-full border border-[#1f6d45] bg-[#113723] px-2 py-1 text-[#b4f0cd]">Quote status: Approved</span>
+          ) : effectiveQuoteChoice === "reject" ? (
+            <span className="inline-flex rounded-full border border-[#7f2a2a] bg-[#3a1414] px-2 py-1 text-[#ffb3b3]">Quote status: Rejected</span>
+          ) : (
+            <span className="inline-flex rounded-full border border-[#7a6430] bg-[#2f2814] px-2 py-1 text-[#f1d375]">Quote status: Pending action</span>
+          )}
         </div>
-        <div className="flex gap-2">
-          <button
-            className={`border rounded-lg px-3 py-2 text-sm ${
-              effectiveQuoteChoice === "accept" ? "bg-green-600 text-white border-green-600" : ""
-            }`}
-            style={
-              effectiveQuoteChoice === "accept"
-                ? { backgroundColor: "#16a34a", borderColor: "#16a34a", color: "#ffffff" }
-                : undefined
-            }
-            onClick={() => onQuote("accept")}
-          >
-            Approve quote
-          </button>
-          <button
-            className={`border rounded-lg px-3 py-2 text-sm ${
-              effectiveQuoteChoice === "reject" ? "bg-red-600 text-white border-red-600" : ""
-            }`}
-            style={
-              effectiveQuoteChoice === "reject"
-                ? { backgroundColor: "#dc2626", borderColor: "#dc2626", color: "#ffffff" }
-                : undefined
-            }
-            onClick={() => onQuote("reject")}
-          >
-            Reject quote
+        <ClientActionButtons
+          onPrimary={() => onQuote("accept")}
+          onSecondary={onQuoteQuestion}
+          onDanger={() => onQuote("reject")}
+          primaryLabel="Approve Quote"
+          secondaryLabel="Request Changes"
+          dangerLabel="Reject Quote"
+          onDownloadPdf={
+            job.quote
+              ? () => {
+                  const quote = job.quote;
+                  if (!quote) return;
+                  downloadQuotePdf({
+                    quoteNumber,
+                    issueDate: new Date(quote.updated_at ?? job.created_at).toLocaleDateString(),
+                    validUntil: new Date(
+                      new Date(quote.updated_at ?? job.created_at).getTime() + 7 * 24 * 60 * 60 * 1000
+                    ).toLocaleDateString(),
+                    jobReference: `JOB-${job.id.slice(0, 8).toUpperCase()}`,
+                    clientName: "Client",
+                    clientPhone: "-",
+                    clientEmail: "-",
+                    propertyAddress: job.address_line ?? "-",
+                    serviceTitle: job.description?.split("/")[0]?.trim() ?? "Service request",
+                    scopeOfWork: quote.quote_notes ?? job.description ?? "Detailed maintenance works as per approved scope.",
+                    inspectionFee: Number(quote.inspection_fee ?? 0),
+                    laborCost: Number(quote.labor_cost ?? 0),
+                    materialsCost: Number(quote.materials_cost ?? 0),
+                    discount: Number(quote.discount ?? 0),
+                  });
+                }
+              : undefined
+          }
+        />
+        <div className="mt-3 space-y-2">
+          <input
+            className="hem-input"
+            placeholder="Ask a question about this quote"
+            value={quoteQuestion}
+            onChange={(e) => setQuoteQuestion(e.target.value)}
+          />
+          <button className="hem-btn-secondary text-sm" onClick={onQuoteQuestion}>
+            Ask question
           </button>
         </div>
       </section>
 
-      <section className="border rounded-xl p-5 bg-white space-y-3">
+      <section className="hem-card border border-[#5f4d1d] rounded-xl p-5 space-y-3">
         <h2 className="text-lg font-semibold">Photos</h2>
         {mode === "add-media" ? (
           <p className="text-sm text-emerald-700">
@@ -268,7 +400,7 @@ export default function ClientJobDetailsPage({ params }: { params: Promise<{ id:
           {media.length === 0 ? <p className="text-sm text-slate-500">No photos uploaded.</p> : null}
         </div>
 
-        <div className="rounded-lg border border-dashed p-3 bg-slate-50 space-y-2">
+        <div className="rounded-lg border border-dashed border-[#6f5a23] p-3 bg-[#111111] space-y-2">
           <p className="text-sm">Upload pictures/videos here</p>
           <input
             ref={mediaInputRef}
@@ -305,22 +437,22 @@ export default function ClientJobDetailsPage({ params }: { params: Promise<{ id:
         {uploadSuccess ? <p className="text-xs text-green-700">Upload successful.</p> : null}
       </section>
 
-      <section className="border rounded-xl p-5 bg-white space-y-2">
+      <section className="hem-card border border-[#5f4d1d] rounded-xl p-5 space-y-2">
         <h2 className="text-lg font-semibold">Notes</h2>
-        <textarea className="border rounded-lg p-2 w-full min-h-20" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add client note" />
-        <button className="border rounded-lg px-3 py-2 text-sm" onClick={onSaveNote}>Save note</button>
-        <p className="text-xs text-slate-500">Technician notes will appear here when available.</p>
+        <textarea className="hem-input rounded-lg p-2 w-full min-h-20" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add client note" />
+        <button className="hem-btn-secondary rounded-lg px-3 py-2 text-sm" onClick={onSaveNote}>Save note</button>
+        <p className="text-xs text-[#bdbdbd]">Technician notes will appear here when available.</p>
       </section>
 
       {mode === "cancel" ? (
-        <section className="border rounded-xl p-5 bg-white">
-          <button className="border rounded-lg px-3 py-2 text-sm" onClick={onCancel}>Confirm cancel request</button>
+        <section className="hem-card border border-[#5f4d1d] rounded-xl p-5">
+          <button className="hem-btn-secondary rounded-lg px-3 py-2 text-sm" onClick={onCancel}>Confirm cancel request</button>
         </section>
       ) : null}
 
       <section className="flex flex-wrap gap-2">
-        <Link href="/client/my-jobs" className="border rounded-lg px-3 py-2 text-sm bg-white">Back to my jobs</Link>
-        <button className="border rounded-lg px-3 py-2 text-sm bg-white" onClick={onCancel}>Cancel request</button>
+        <Link href="/client/my-jobs" className="hem-btn-secondary rounded-lg px-3 py-2 text-sm">Back to my jobs</Link>
+        <button className="hem-btn-secondary rounded-lg px-3 py-2 text-sm" onClick={onCancel}>Cancel request</button>
       </section>
 
       {message ? <p className="text-sm">{message}</p> : null}

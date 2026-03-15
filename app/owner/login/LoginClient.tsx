@@ -1,29 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import supabase from "@/lib/supabase/client";
-import { SupabaseClient } from "@supabase/supabase-js";
+import Image from "next/image";
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Request timed out. Please retry.")), ms);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
 
 function resolveNextPath(nextParam: string | null) {
   if (!nextParam || !nextParam.startsWith("/")) return "/owner/dashboard";
   if (nextParam.startsWith("/owner/login")) return "/owner/dashboard";
   return nextParam;
-}
-
-async function waitForSession(
-  supabase: SupabaseClient,
-  attempts = 8,
-  delayMs = 120
-) {
-  for (let index = 0; index < attempts; index += 1) {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (session) return true;
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-  }
-  return false;
 }
 
 export default function LoginClient() {
@@ -42,28 +42,44 @@ export default function LoginClient() {
     setLoading(true);
     setMsg(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    try {
+      const { error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        }),
+        12000
+      );
 
-    if (error) {
-      setMsg(error.message);
+      if (error) {
+        setMsg(error.message);
+        setLoading(false);
+        return;
+      }
+
+      window.location.assign(next);
+    } catch (err: unknown) {
+      setMsg(err instanceof Error ? err.message : "Login failed");
       setLoading(false);
-      return;
     }
-
-    await waitForSession(supabase);
-
-    router.replace(next);
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1>Owner Login</h1>
+    <main className="min-h-screen grid place-items-center px-4">
+      <section className="hem-card w-full max-w-md p-8">
+        <Image
+          src="/logo-hem-transparent-wide.png"
+          alt="H.E.M Property Maintenance"
+          width={170}
+          height={170}
+          className="mx-auto mb-4 h-28 w-28 rounded-xl border border-amber-400/40 object-contain"
+          priority
+        />
+        <h1 className="hem-title text-2xl text-center">Owner Login</h1>
 
-      <form onSubmit={handleLogin} style={{ display: "grid", gap: 12, maxWidth: 360 }}>
-        <input
+        <form onSubmit={handleLogin} style={{ display: "grid", gap: 12, marginTop: 16 }}>
+          <input
+          className="hem-input"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -71,6 +87,7 @@ export default function LoginClient() {
         />
 
         <input
+          className="hem-input"
           placeholder="Password"
           type="password"
           value={password}
@@ -78,12 +95,13 @@ export default function LoginClient() {
           autoComplete="current-password"
         />
 
-        <button type="submit" disabled={loading}>
+        <button className="hem-btn-primary" type="submit" disabled={loading}>
           {loading ? "Signing in..." : "Sign in"}
         </button>
 
-        {msg ? <p style={{ color: "red" }}>{msg}</p> : null}
-      </form>
-    </div>
+          {msg ? <p className="hem-alert">{msg}</p> : null}
+        </form>
+      </section>
+    </main>
   );
 }

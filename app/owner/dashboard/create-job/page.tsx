@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ownerFetch } from "@/lib/owner/client-auth";
 
 export default function CreateJobPage() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function CreateJobPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/jobs", {
+      const res = await ownerFetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ service, notes }),
@@ -33,8 +34,8 @@ export default function CreateJobPage() {
       // success -> go back to dashboard
       router.push("/owner/dashboard");
       router.refresh();
-    } catch (err: any) {
-      setError(err?.message ?? "Unknown error");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
     }

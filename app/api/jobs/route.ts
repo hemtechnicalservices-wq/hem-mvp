@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createNotification, notifyRole } from "@/lib/notifications/events";
+import { sendJobStatusExternalAlert, sendNewInquiryExternalAlert, sendRequestReceivedClientAlert } from "@/lib/notifications/externalAlerts";
 
 function isMissingAddressIdError(message: string | undefined): boolean {
   const m = (message ?? "").toLowerCase();
@@ -89,7 +92,21 @@ export async function POST(req: NextRequest) {
     description?: string;
     address?: string;
     preferredAt?: string;
+    urgency?: "normal" | "urgent" | "emergency";
+    contactPhone?: string;
+    contactWhatsapp?: string;
   };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("amc_plan_status")
+    .eq("id", user.id)
+    .maybeSingle();
+  const amcActive = String((profile as { amc_plan_status?: string | null } | null)?.amc_plan_status ?? "")
+    .toLowerCase()
+    .includes("active");
+  const descriptionText = `${category ?? ""} / ${issue ?? ""} - ${description ?? ""}`.trim();
+  const amcLine = amcActive ? "\nAMC ACTIVE: Priority booking + free inspection eligibility." : "";
 
   const { data: addressRow, error: addressErr } = await supabase
     .from("client_addresses")
@@ -103,11 +120,17 @@ export async function POST(req: NextRequest) {
 
   if (addressErr) return NextResponse.json({ error: addressErr.message }, { status: 400 });
 
+  const urgency = (body as { urgency?: string } | null)?.urgency;
+
   let { data: job, error: jobErr } = await supabase
     .from("jobs")
     .insert({
       client_id: user.id,
-      description: `${category ?? ""} / ${issue ?? ""} - ${description ?? ""}`.trim(),
+      description: `${descriptionText}${amcLine}`,
+      service_type: category ?? null,
+      issue_type: issue ?? null,
+      address: address ?? null,
+      urgency: urgency ?? "normal",
       address_id: addressRow.id,
       preferred_at: preferredAt || null,
       status: "new",
@@ -120,7 +143,11 @@ export async function POST(req: NextRequest) {
       .from("jobs")
       .insert({
         client_id: user.id,
-        description: `${category ?? ""} / ${issue ?? ""} - ${description ?? ""}`.trim(),
+        description: `${descriptionText}${amcLine}`,
+        service_type: category ?? null,
+        issue_type: issue ?? null,
+        address: address ?? null,
+        urgency: urgency ?? "normal",
         preferred_at: preferredAt || null,
         status: "new",
       })
@@ -135,7 +162,11 @@ export async function POST(req: NextRequest) {
       .from("jobs")
       .insert({
         client_id: user.id,
-        description: `${category ?? ""} / ${issue ?? ""} - ${description ?? ""}`.trim(),
+        description: `${descriptionText}${amcLine}`,
+        service_type: category ?? null,
+        issue_type: issue ?? null,
+        address: address ?? null,
+        urgency: urgency ?? "normal",
         preferred_at: preferredAt || null,
         status: "new",
       })
@@ -146,5 +177,57 @@ export async function POST(req: NextRequest) {
   }
 
   if (jobErr) return NextResponse.json({ error: jobErr.message }, { status: 400 });
+
+  const admin = createSupabaseAdminClient();
+  await createNotification(admin, {
+    userId: user.id,
+    title: "Request received",
+    message: `Your request ${job?.id ?? ""} has been received.`,
+    type: "request_received",
+  });
+  await notifyRole(admin, "dispatcher", {
+    title: "New request received",
+    message: `New ${category ?? "service"} request from client.`,
+    type: "request_received",
+  });
+  await notifyRole(admin, "technician", {
+    title: "New inquiry in queue",
+    message: `New ${category ?? "service"} request entered dispatcher queue.`,
+    type: "request_received",
+  });
+  await notifyRole(admin, "owner", {
+    title: "New request received",
+    message: `New ${category ?? "service"} request from client.`,
+    type: "request_received",
+  });
+
+  await sendNewInquiryExternalAlert({
+    jobId: String(job?.id ?? ""),
+    clientId: user.id,
+    service: category ?? "Service request",
+    issue: issue ?? "General issue",
+    urgency: urgency ?? "normal",
+    address: address ?? "N/A",
+    createdAtIso: String(job?.created_at ?? new Date().toISOString()),
+  });
+
+  const clientPhone =
+    String((body as { contactPhone?: string } | null)?.contactPhone ?? "").trim() ||
+    String((body as { contactWhatsapp?: string } | null)?.contactWhatsapp ?? "").trim();
+  if (clientPhone) {
+    await sendRequestReceivedClientAlert({
+      jobId: String(job?.id ?? ""),
+      clientPhone,
+    });
+  }
+
+  await sendJobStatusExternalAlert({
+    jobId: String(job?.id ?? ""),
+    status: "request_received",
+    service: category ?? undefined,
+    issue: issue ?? undefined,
+    clientPhone: clientPhone || null,
+  });
+
   return NextResponse.json({ ok: true, job });
 }

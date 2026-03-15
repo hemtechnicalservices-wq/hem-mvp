@@ -23,7 +23,9 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
           ? `/technician/login?next=${next}`
           : pathname?.startsWith("/dispatcher")
           ? `/dispatcher/login?next=${next}`
-          : `/owner/login?next=${next}`;
+          : pathname?.startsWith("/owner")
+          ? `/owner/login?next=${next}`
+          : `/login?next=${next}`;
 
         router.replace(loginPath);
         return;

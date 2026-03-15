@@ -15,23 +15,36 @@ export default async function ServiceIssuesPage({
   return (
     <main className="p-4 md:p-6 space-y-5">
       <section>
-        <Link href="/client/services" className="text-sm underline">Back to services</Link>
-        <h1 className="text-2xl font-semibold mt-2">{service.name}</h1>
-        <p className="text-sm text-slate-600 mt-1">Choose the exact issue to continue your request.</p>
+        <Link href="/client/services" className="text-sm text-[#e6c75a] underline">Back to services</Link>
+        <h1 className="mt-2 text-2xl font-semibold text-[#f2f2f2]">{service.name}</h1>
+        <p className="hem-muted mt-1 text-sm">Choose the exact issue to continue your request.</p>
       </section>
 
       <section className="space-y-3">
         {service.issues.map((issue) => (
-          <article key={issue} className="border rounded-xl p-4 bg-white flex items-center justify-between gap-4">
-            <p className="text-sm">{issue}</p>
+          <article
+            key={issue}
+            className="flex items-center justify-between gap-4 rounded-xl border border-[#5f4d1d] bg-[#151515]/95 p-4"
+          >
+            <p className="text-sm text-[#efefef]">{issue}</p>
             <Link
               href={`/client/new-request?service=${encodeURIComponent(service.name)}&issue=${encodeURIComponent(issue)}`}
-              className="border rounded-lg px-3 py-1.5 text-sm whitespace-nowrap"
+              className="whitespace-nowrap rounded-lg border border-[#9e8435] bg-[#171717] px-3 py-1.5 text-sm text-[#f0d67b] hover:border-[#d4af37]"
             >
               Select
             </Link>
           </article>
         ))}
+
+        <article className="flex items-center justify-between gap-4 rounded-xl border border-[#8b732e] bg-[#171717] p-4">
+          <p className="text-sm text-[#efefef]">Another (custom issue)</p>
+          <Link
+            href={`/client/new-request?service=${encodeURIComponent(service.name)}&issue=${encodeURIComponent("Another (custom issue)")}`}
+            className="whitespace-nowrap rounded-lg border border-[#d4af37] bg-[#1b1b1b] px-3 py-1.5 text-sm text-[#f0d67b] hover:border-[#e6c75a]"
+          >
+            Another
+          </Link>
+        </article>
       </section>
     </main>
   );

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CLIENT_DATA_FIELDS } from "../spec";
+import { clientFetch } from "@/lib/client/client-auth";
 
 type AddressForm = {
   id: string;
@@ -26,7 +27,7 @@ export default function ClientProfilePage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/client/profile");
+        const res = await clientFetch("/api/client/profile");
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error ?? "Failed to load profile");
 
@@ -82,7 +83,7 @@ export default function ClientProfilePage() {
         })),
       };
 
-      const res = await fetch("/api/client/profile", {
+      const res = await clientFetch("/api/client/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
